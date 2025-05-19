@@ -28,11 +28,6 @@ def get_trade_cal():
     today = datetime.date.today()
     start_date = (today - datetime.timedelta(days=90)).strftime('%Y%m%d')
     end_date = today.strftime('%Y%m%d')
-    if os.path.exists(TRADE_CAL_XLS):
-        trade_cal_df = pd.read_excel(TRADE_CAL_XLS, dtype=str)
-        trade_cal_df = trade_cal_df.dropna()
-        if trade_cal_df['cal_date'].min() <= start_date and trade_cal_df['cal_date'].max() >= end_date:
-            return
     trade_cal_df = pro.trade_cal(exchange='', start_date=start_date, end_date=end_date)
     # trade_cal_df = trade_cal_df[trade_cal_df['is_open'] == 1]
     trade_cal_df = trade_cal_df[['cal_date', 'is_open']]
