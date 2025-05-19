@@ -104,16 +104,17 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base
               'target_rate', 'price_in', 'price_out', 'price_now', 'amount', 'cost_fee', 'profit', 'rate_pred', 'rate_pct', 
               'rate_current', 'rate_yearly', 'status']
     new_row = pd.DataFrame([row_data, ], columns=column)
-    # adjust cash amount and stock numbers signal
-    cash_amount_buy = round(price * (1 + cost_fee) * amount, 2)
-    note = f'买入 {code} {stock_name} at {price} total {amount}'
-    res = create_or_update_funds_change_list(-cash_amount_buy, note)
-    if not res:  # cash balance is not enough
-        return
+    # adjust stock numbers signal and cash amount
     global HOLDING_STOCKS
     if HOLDING_STOCKS >= MAX_STOCKS:
         return
     HOLDING_STOCKS += 1
+    cash_amount_buy = round(price * (1 + cost_fee) * amount, 2)
+    note = f'买入 {code} {stock_name} at {price} total {amount}'
+    res = create_or_update_funds_change_list(-cash_amount_buy, note)
+    if not res:  # cash balance is not enough
+        HOLDING_STOCKS -= 1
+        return
     new_row.to_csv(HOLDING_LIST, mode='a', header=False, index=False)
     now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
     trade_log.info(f'买入 {code} {stock_name} {industry} at {price} total {amount} at {now}')
