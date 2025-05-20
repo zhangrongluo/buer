@@ -1,7 +1,6 @@
 """
 股票列表、交易日历等基本信息
 """
-import os
 import datetime
 import tushare as ts 
 import pandas as pd

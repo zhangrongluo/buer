@@ -14,7 +14,7 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not
-                   
+
 
 backup_dir = f'{BACKUP_DIR}/oversold'
 os.makedirs(backup_dir, exist_ok=True)
