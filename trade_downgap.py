@@ -389,6 +389,14 @@ def scan_buy_in_list():
             return None
 
     def scan_buy_in_list_row(idx_row):
+        # if not in trading time 9:35-11:30, 13:00-14:55, skip
+        now = datetime.datetime.now().time()
+        am_begin = datetime.time(9, 35)
+        am_end = datetime.time(11, 30)
+        pm_begin = datetime.time(13, 0)
+        pm_end = datetime.time(14, 55)
+        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
+            return
         i, row = idx_row
         code = row['ts_code']
         name = row['stock_name']
@@ -433,9 +441,6 @@ def scan_buy_in_list():
                     return
             amount = calculate_buy_in_amount(funds=buy_in_amount, price=price_now)
         if amount == 0:
-            return
-        now = datetime.datetime.now().time()
-        if now <= datetime.time(9, 35) or now >= datetime.time(14, 55):  # 交易时间 9:35-14:55
             return
         with lock:
             buy_in(code, price_now, amount, trade_date, target_price)
@@ -551,6 +556,14 @@ def scan_holding_list():
         holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
     
     def scan_holding_list_row(idx_row):
+        # if not in trading time 9:35-11:30, 13:00-14:55, skip
+        now = datetime.datetime.now().time()
+        am_begin = datetime.time(9, 35)
+        am_end = datetime.time(11, 30)
+        pm_begin = datetime.time(13, 0)
+        pm_end = datetime.time(14, 55)
+        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
+            return
         i, row = idx_row
         if row['date_out'] != '':
             return
@@ -563,9 +576,6 @@ def scan_holding_list():
         price_now = get_stock_realtime_price(row['ts_code'])
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
         if price_now is None:
-            return
-        now = datetime.datetime.now().time()
-        if now <= datetime.time(9, 35) or now >= datetime.time(14, 55):  # 交易时间 9:35-14:55
             return
         fill_date = row['fill_date']
         if price_now >= row['target_price'] or fill_date != '':

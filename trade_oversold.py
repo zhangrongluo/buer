@@ -349,9 +349,13 @@ def scan_buy_in_list():
         return price_max
 
     def scan_buy_in_list_row(idx_row):
-        # if not in trade time, skip
+        # if not in trading time 9:35-11:30, 13:00-14:55, skip
         now = datetime.datetime.now().time()
-        if now <= datetime.time(9, 35) or now >= datetime.time(14, 55):  # 交易时间 9:35-14:55
+        am_begin = datetime.time(9, 35)
+        am_end = datetime.time(11, 30)
+        pm_begin = datetime.time(13, 0)
+        pm_end = datetime.time(14, 55)
+        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
             return
         i, row = idx_row
         code = row['ts_code']
@@ -484,9 +488,13 @@ def scan_holding_list():
         holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
     
     def scan_holding_list_row(idx_row):
-        # if not in trade time, skip
+        # if not in trading time 9:35-11:30, 13:00-14:55, skip
         now = datetime.datetime.now().time()
-        if now <= datetime.time(9, 35) or now >= datetime.time(14, 55):  # 交易时间 9:35-14:55
+        am_begin = datetime.time(9, 35)
+        am_end = datetime.time(11, 30)
+        pm_begin = datetime.time(13, 0)
+        pm_end = datetime.time(14, 55)
+        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
             return
         i, row = idx_row
         if row['date_out'] != '':

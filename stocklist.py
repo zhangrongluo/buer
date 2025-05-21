@@ -58,6 +58,15 @@ def get_all_stocks_info() -> list:
     """
     return LIST_DF[['ts_code', 'name', 'industry', 'cnspell']].values.tolist()
 
+def get_all_stock_industry() -> list:
+    """
+    get all stock industry in the LIST_DF
+    :return: list of stock industry
+    """
+    res =  LIST_DF['industry'].unique().tolist()
+    res = [item for item in res if isinstance(item, str)]
+    return res
+
 
 if __name__ == '__main__':
     # test
@@ -65,3 +74,5 @@ if __name__ == '__main__':
     print(get_name_and_industry_by_code('000001.SZ'))
     print(get_all_stocks_info()[5:10])
     print(STOCK_LIST_NUMS)
+    print(get_all_stock_industry())
+    print(len(get_all_stock_industry()))
