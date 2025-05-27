@@ -6,11 +6,11 @@ import random
 from tensorflow.keras import layers  # type: ignore
 import math
 import pandas as pd  # type: ignore
-from matplotlib import pyplot as plt  # type: ignore
 from tensorflow import keras  
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal
+from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_XD_XR_DR_dividend_data
 from trade_oversold import trade_process
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR
 from cons_oversold import params_list, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, TEST_DATASET_PERCENT, MODEL_NAME
@@ -445,6 +445,8 @@ def update_trade_cal_and_stock_list():
     get_stock_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 交易日历和股票列表更新完成！')
+    download_all_XD_XR_DR_dividend_data()
+    print(f'({MODEL_NAME}) {today} 分红派息数据更新完成！')
 
 # 每天16:30 PM 下载行情和指标基础数据
 @scheduler.scheduled_job(
@@ -455,7 +457,6 @@ def update_trade_cal_and_stock_list():
 )
 @is_trade_day
 def auto_task0():
-    from basic_data import update_all_daily_data, update_all_daily_indicator
     update_all_daily_data(step=5)
     update_all_daily_indicator(step=5)
     today = datetime.datetime.now().date().strftime('%Y%m%d')
