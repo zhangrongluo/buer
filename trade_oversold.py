@@ -13,7 +13,7 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
                             DAILY_PROFIT, FUNDS_LIST, TRADE_LOG)
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
-from utils import send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not
+from utils import send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, get_XD_XR_DR_qfq_price_and_amount
 
 
 backup_dir = f'{BACKUP_DIR}/oversold'
@@ -426,7 +426,8 @@ def refresh_holding_list():
         # if status is sold_out, skip
         if row['status'] == 'sold_out':
             return
-        # if status is holding, update holding_days, days, price_now, profit, rate_current, rate_yearly
+        # if status is holding, update holding_days, days, price_now, price_in, amount, profit
+        # rate_current, rate_yearly
         # holding_days(自然日历间隔天数)
         date_in = datetime.datetime.strptime(row['date_in'], '%Y%m%d')  # date format problem
         today = datetime.datetime.now()
@@ -446,17 +447,25 @@ def refresh_holding_list():
             today_index = len(trade_date_list) - 1
             days = abs(today_index - trade_date_index) + 1  # today还未收盘，未在daily_df中，所以+1
         holding_df.loc[i, 'days'] = days
-        # price_now, profit, rate_current, rate_yearly
+        # price_now, price_in, amount, profit, rate_current, rate_yearly
         price_now = get_stock_realtime_price(row['ts_code'])
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
         if price_now is None:
             with lock:
                 holding_df.to_csv(HOLDING_LIST, index=False)
             return
+        ts_code = row['ts_code']
         price_in = row['price_in']
         amount = row['amount']  # 股数量
+        date_in = row['date_in']
+        # 对买入价格和买入数量除权
+        price_in, amount = get_XD_XR_DR_qfq_price_and_amount(
+            code=ts_code, pre_price=price_in, amount=amount, start=date_in
+        )
         cost_fee = row['cost_fee']
         holding_df.loc[i, 'price_now'] = price_now
+        holding_df.loc[i, 'price_in'] = price_in
+        holding_df.loc[i, 'amount'] = amount
         profit = (price_now*(1-cost_fee) - price_in*(1+cost_fee)) * amount
         profit = round(profit, 4)
         holding_df.loc[i, 'profit'] = profit

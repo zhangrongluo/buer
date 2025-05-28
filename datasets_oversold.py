@@ -6,6 +6,53 @@ import pandas as pd
 import datetime
 from stocklist import get_name_and_industry_by_code
 from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR
+from utils import get_XD_XR_DR_qfq_price_DF
+
+def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
+    """
+    计算RSI指标
+    :param df: DataFrame
+    :param period: 计算周期
+    """
+    if len(df) < period:
+        return None
+    df_rsi = df.iloc[-period:]
+    # 使用pct_change计算涨跌幅
+    up = df_rsi.loc[:, 'pct_chg'].apply(lambda x: x if x > 0 else 0).sum()
+    down = abs(df.loc[:, 'pct_chg'].apply(lambda x: x if x < 0 else 0).sum())
+    rs = up /(down + 1e-10) if down == 0 else up / down
+    rsi = 100 - 100 / (1 + rs)
+    return round(rsi, 2)
+
+def calculate_K_indicator(df: pd.DataFrame, period: int = 14):
+    """
+    计算K指标
+    :param df: DataFrame
+    :param period: 计算周期
+    NOTE: K = 100 * (close - min) / (max - min)
+    """
+    if len(df) < period:
+        return None
+    df_k = df.iloc[-period:]
+    max_price = df_k['high'].max()
+    min_price = df_k['low'].min()
+    close = df_k.iloc[-1]['close']
+    K = 100 * (close - min_price) / (max_price - min_price)
+    return round(K, 2)
+
+def calculate_MAP_indicator(df: pd.DataFrame, period: int = 15) -> float:
+    """
+    计算移动平均价格指标
+    :param df: DataFrame
+    :param period: 计算周期
+    NOTE: 
+    MAP = sum(close) / period
+    """
+    if len(df) < period:
+        return None
+    df_map = df.iloc[-period:]
+    MAP = df_map['close'].sum() / period
+    return round(MAP, 2)
 
 def create_stock_max_down_dataset(params: tuple):
     """ 
@@ -54,52 +101,6 @@ def create_stock_max_down_dataset(params: tuple):
     df_trade['trade_date'] = df_trade['trade_date'].apply(lambda x: str(x)[:8])
     df_trade['trade_date'] = df_trade['trade_date'].apply(lambda x: '' if x == 'nan' else x)  # 去掉nan
     df_trade['mv_ratio'] = round(df_trade['circ_mv']/df_trade['total_mv'], 4)
-
-    def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
-        """
-        计算RSI指标
-        :param df: DataFrame
-        :param period: 计算周期
-        """
-        if len(df) < period:
-            return None
-        df_rsi = df.iloc[-period:]
-        # 使用pct_change计算涨跌幅
-        up = df_rsi.loc[:, 'pct_chg'].apply(lambda x: x if x > 0 else 0).sum()
-        down = abs(df.loc[:, 'pct_chg'].apply(lambda x: x if x < 0 else 0).sum())
-        rs = up /(down + 1e-10) if down == 0 else up / down
-        rsi = 100 - 100 / (1 + rs)
-        return round(rsi, 2)
-    
-    def calculate_K_indicator(df: pd.DataFrame, period: int = 14):
-        """
-        计算K指标
-        :param df: DataFrame
-        :param period: 计算周期
-        NOTE: K = 100 * (close - min) / (max - min)
-        """
-        if len(df) < period:
-            return None
-        df_k = df.iloc[-period:]
-        max_price = df_k['high'].max()
-        min_price = df_k['low'].min()
-        close = df_k.iloc[-1]['close']
-        K = 100 * (close - min_price) / (max_price - min_price)
-        return round(K, 2)
-
-    def calculate_MAP_indicator(df: pd.DataFrame, period: int = 15) -> float:
-        """
-        计算移动平均价格指标
-        :param df: DataFrame
-        :param period: 计算周期
-        NOTE: 
-        MAP = sum(close) / period
-        """
-        if len(df) < period:
-            return None
-        df_map = df.iloc[-period:]
-        MAP = df_map['close'].sum() / period
-        return round(MAP, 2)
 
     #  遍历df_daily, 计算每个交易日的最大下跌幅度
     max_down_list = []
@@ -299,8 +300,9 @@ def merge_all_oversold_dataset(forward_days, backward_days, down_filter):
             print(f"Error reading {csv_path}: {e}")
             continue
     df_all = pd.concat(df_list, ignore_index=True)
-    # 删除'turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio'均为空的行
-    df_all = df_all.dropna(subset=['turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio'])
+    # 对'turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio'为空的行以 0 填充
+    columns_to_fill = ['turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio']
+    df_all[columns_to_fill] = df_all[columns_to_fill].fillna(0)
     df_all = df_all.sort_values(by=['trade_date', 'code'], ascending=True)
     df_all = df_all.reset_index(drop=True)
     if os.path.exists(all_oversold_csv):

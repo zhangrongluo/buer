@@ -95,7 +95,7 @@ def get_stock_realtime_price(code: str) -> float | None:
 
 def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
     """
-    将价格恢复到除权除息前的水平(前复权)
+    计算除权除息后的价格序列(前复权)
     :param src_data: basicdata/dailydata下日行情数据(按trade_date升序排列)
     :return: src_data(open、high、low、close)除权除息前的价格序列(按trade_date升序排列)
     NOTE: 
@@ -119,7 +119,7 @@ def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
     dividend_df = dividend_df.sort_values(by='ex_date', ascending=True)  # 升序排列
     dividend_df.reset_index(drop=True, inplace=True)  # 重置索引
     # 遍历dividend_df，如果ex_date在scr_data_cp的trade_date中，
-    # 计算除权除息前价格(from ex_date to src_data_cp's last trade_date)
+    # 计算除权除息后价格(from ex_date to src_data_cp's last trade_date)
     for _, row in dividend_df.iterrows():
         ex_date = row['ex_date']
         if ex_date not in src_data_cp['trade_date'].values:
@@ -131,16 +131,18 @@ def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
             (src_data_cp.loc[:idx-1, ['open', 'high', 'low', 'close']] - cash_dividend_per_stock) / (1 + div_per_stock)
     return src_data_cp
 
-def get_XD_XR_DR_qfq_price(code: str, pre_price: float, start: float, end: str=None) -> float:
+def get_XD_XR_DR_qfq_price_and_amount(code, pre_price, amount, start:str, end:str = None) -> tuple[float, float]:
     """
-    将实时价格price_now恢复到start日除权除息前的价格(前复权)
+    将start日pre_price和股数转换到end日除权除息后的价格和股数(前复权)
     :param code: 股票代码, 如 000001 或 000001.SZ
     :param pre_price: 未复权的价格
+    :param amount: 未复权的股数
     :param start: 起始日期(YYYYMMDD)
     :param end: 结束日期(YYYYMMDD), None表示到今天
-    :return: 除权除息后的价格
+    :return: (end日除权除息后的价格, end日除权除息后的股数)
     NOTE: 
     xr_price = (pre_price - cash_dividend_per_stock) / (1 + div_per_stock)
+    xr_amount = amount * (1 + div_per_stock)
     div_per_stock: 每股转送股数
     cash_dividend_per_stock: 每股派息税前金额
     如有多次除权除息，按实施时间顺序从前到后依次计算(前复权)
@@ -158,18 +160,19 @@ def get_XD_XR_DR_qfq_price(code: str, pre_price: float, start: float, end: str=N
         raise ValueError("start 不得晚于 end")
     dividend_csv = f'{FINANDATA_DIR}/dividend/{code}.csv'
     if not os.path.exists(dividend_csv):
-        return pre_price
+        return pre_price, amount
     dividend_df = pd.read_csv(dividend_csv, dtype={'ex_date': str})
     if dividend_df.empty:
-        return pre_price
+        return pre_price, amount
     columns = ['ts_code', 'name', 'industry', 'stk_div', 'cash_div_tax', 'ex_date']
     dividend_df = dividend_df[columns]
     dividend_df = dividend_df.dropna(subset=['ex_date'])
     dividend_df = dividend_df.sort_values(by='ex_date', ascending=True)  # 升序排列
     dividend_df.reset_index(drop=True, inplace=True)  # 重置索引
     # 遍历dividend_df，如果ex_date在start和end之间，
-    # 计算除权除息前价格(from start to end)
+    # 计算除权除息后的价格(from start to end)
     xr_price = pre_price
+    xr_amount = amount
     for _, row in dividend_df.iterrows():
         ex_date = row['ex_date']
         if not (start < ex_date <= end):
@@ -177,10 +180,11 @@ def get_XD_XR_DR_qfq_price(code: str, pre_price: float, start: float, end: str=N
         div_per_stock = row['stk_div'] if pd.notna(row['stk_div']) else 0
         cash_dividend_per_stock = row['cash_div_tax'] if pd.notna(row['cash_div_tax']) else 0
         xr_price = (xr_price - cash_dividend_per_stock) / (1 + div_per_stock)
+        xr_amount = xr_amount * (1 + div_per_stock)
     xr_price = round(xr_price, 2)  # 保留两位小数
     if xr_price < 0:
         xr_price = 0.0  # 如果计算结果小于0，则返回0
-    return xr_price
+    return xr_price, xr_amount
 
 def is_trade_date_or_not():
     """ 
