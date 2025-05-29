@@ -4,7 +4,7 @@
 import datetime
 import tushare as ts 
 import pandas as pd
-from cons_general import STOCK_LIST_XLS, TRADE_CAL_XLS
+from cons_general import STOCK_LIST_XLS, TRADE_CAL_XLS, UP_DOWN_LIMIT_XLS
 
 __all__ = ['get_name_and_industry_by_code', 'get_all_stocks_info', 'STOCK_LIST_NUMS', 'LIST_DF', 'pro']
 
@@ -67,6 +67,13 @@ def get_all_stock_industry() -> list:
     res = [item for item in res if isinstance(item, str)]
     return res
 
+def get_up_down_limit_list():
+    """
+    get today up down limit list and save to the basicdata dir
+    """
+    today = datetime.date.today().strftime('%Y%m%d')
+    up_down_limit_df = pro.stk_limit(trade_date=today)
+    up_down_limit_df.to_excel(UP_DOWN_LIMIT_XLS, index=False)
 
 if __name__ == '__main__':
     # test

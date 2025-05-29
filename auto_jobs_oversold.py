@@ -9,7 +9,7 @@ import pandas as pd  # type: ignore
 from tensorflow import keras  
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
-from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal
+from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_XD_XR_DR_dividend_data
 from trade_oversold import trade_process, refresh_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR
@@ -487,6 +487,18 @@ def auto_task2():
     print(f'({MODEL_NAME}) {today} 买入清单更新完成！')
     refresh_buy_in_list()
     print(f'({MODEL_NAME}) {today} 买入清单刷新完成！')
+
+# 每天9:15 AM 下载涨跌停表
+@scheduler.scheduled_job(
+    trigger='cron', 
+    hour=9, minute=15, misfire_grace_time=300, 
+    id='get_up_down_limit_list'
+)
+@is_trade_day
+def get_up_down_limit_list_task():
+    get_up_down_limit_list()
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({MODEL_NAME}) {today} 涨跌停表更新完成！')
 
 # 每天15:30 PM 清屏
 @scheduler.scheduled_job(

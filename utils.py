@@ -6,7 +6,7 @@ import datetime
 import requests
 import tushare as ts
 from DrissionPage import ChromiumOptions, Chromium
-from cons_general import TRADE_CAL_XLS, FINANDATA_DIR
+from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS
 from cons_oversold import PAUSE
 
 
@@ -185,6 +185,25 @@ def get_XD_XR_DR_qfq_price_and_amount(code, pre_price, amount, start:str, end:st
     if xr_price < 0:
         xr_price = 0.0  # 如果计算结果小于0，则返回0
     return xr_price, xr_amount
+
+def get_up_down_limit(code: str) -> tuple[float, float]:
+    """
+    获取股票的涨跌停价格
+    :param code: 股票代码, 如 000001 或 000001.SZ
+    :return: (涨停价, 跌停价)
+    """
+    if len(code) == 6:
+        code = code + '.SH' if code.startswith('6') else code + '.SZ'
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    up_down_df = pd.read_excel(UP_DOWN_LIMIT_XLS, dtype={'trade_date': str})
+    if up_down_df['trade_date'].iloc[0] != today:
+        return None, None
+    res_df = up_down_df[up_down_df['ts_code'] == code]
+    if res_df.empty:
+        return None, None
+    up_limit = res_df['up_limit'].values[0]
+    down_limit = res_df['down_limit'].values[0]
+    return up_limit, down_limit
 
 def is_trade_date_or_not():
     """ 

@@ -9,13 +9,13 @@ MIN_PRED_RATE = 0.45  # 预期收益率下限，用于筛选交易数据集，�
 PRED_RATE_PCT = 1.0  # 预期收益率折扣百分比
 SHUFFLE = False  # 是否打乱测试集
 COST_FEE = 0.0005  # 交易费用和佣金比例
-MAX_STOCKS = 85  # 最大持仓股票数
+MAX_STOCKS = 88  # 最大持仓股票数
 ONE_TIME_FUNDS = 60000  # 单次买入资金
 MIN_STOCK_PRICE = 2.88 # 最低股票买入价格，低于此价格不买入
 MAX_DOWN_LIMIT = -0.40 # 最大下跌幅度，超过此值要卖出
 PAUSE = 0.5  # 暂停时间
 initial_funds = 3.6e6  # 初始资金360万
-exception_list = ['退市', '退', 'PT', 'ST', 'XR']  # 例外股票列表,不列入买入清单
+exception_list = ['退市', '退', 'PT', 'ST']  # 例外股票列表,不列入买入清单
 
 # files
 from cons_general import TRADE_DIR, BACKUP_DIR

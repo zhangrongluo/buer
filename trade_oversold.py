@@ -11,9 +11,9 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST,
                             DAILY_PROFIT, FUNDS_LIST, TRADE_LOG)
-from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
+from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, UP_DOWN_LIMIT_XLS
 from cons_hidden import bark_device_key
-from utils import send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, get_XD_XR_DR_qfq_price_and_amount
+from utils import send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, get_XD_XR_DR_qfq_price_and_amount, get_up_down_limit
 
 
 backup_dir = f'{BACKUP_DIR}/oversold'
@@ -372,6 +372,9 @@ def scan_buy_in_list():
             return
         if price_now <= MIN_STOCK_PRICE:
             return
+        down_limit = get_up_down_limit(code=code)[1]
+        if down_limit is not None and abs(price_now - down_limit) <= 0.05:  # if down limit, dont buy in 
+            return
         # wait for the down trend to end
         if waiting_days <= MIN_WAITING_DAYS:  
             return
@@ -517,6 +520,9 @@ def scan_holding_list():
         price_now = get_stock_realtime_price(row['ts_code'])
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
         if price_now is None or price_now <= 0:
+            return
+        up_limit = get_up_down_limit(code=row['ts_code'])[0]
+        if up_limit is not None and abs(price_now - up_limit) <= 0.05:  # if up limit, dont sell out
             return
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']

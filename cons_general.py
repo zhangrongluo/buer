@@ -22,5 +22,6 @@ os.makedirs(TRADE_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # FILES
-STOCK_LIST_XLS = os.path.join(BASICDATA_DIR, 'stocklist.xlsx')
-TRADE_CAL_XLS = os.path.join(BASICDATA_DIR, 'trade_cal.xlsx')
+STOCK_LIST_XLS = os.path.join(BASICDATA_DIR, 'common', 'stocklist.xlsx')
+TRADE_CAL_XLS = os.path.join(BASICDATA_DIR, 'common', 'trade_cal.xlsx')
+UP_DOWN_LIMIT_XLS = os.path.join(BASICDATA_DIR, 'common', 'up_down_limit.xlsx')
