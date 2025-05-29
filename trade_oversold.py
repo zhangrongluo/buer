@@ -76,7 +76,7 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base
         code = code +'.SH' if code.startswith('6') else code + '.SZ'
     msg = get_name_and_industry_by_code(code)
     stock_name = msg[0]
-    pattern = re.compile(r'[*]*[sS][tT]|退市|退|[pP][Tt]|[xX][rR]')  # 例外股票不投
+    pattern = re.compile(r'[*]*[sS][tT]|退市|退|[pP][Tt]')  # 例外股票不投
     if pattern.findall(stock_name):
         return
     industry = msg[1]
@@ -366,7 +366,7 @@ def scan_buy_in_list():
         waiting_days = row['waiting_days']
         price_now = get_stock_realtime_price(code)
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
-        if price_now is None:
+        if price_now is None or price_now <= 0:
             return
         if price_now >= buy_point_base:
             return
@@ -458,10 +458,11 @@ def refresh_holding_list():
         price_in = row['price_in']
         amount = row['amount']  # 股数量
         date_in = row['date_in']
-        # 对买入价格和买入数量除权
-        price_in, amount = get_XD_XR_DR_qfq_price_and_amount(
+        xr_price_in, xr_amount = get_XD_XR_DR_qfq_price_and_amount(
             code=ts_code, pre_price=price_in, amount=amount, start=date_in
-        )
+        )  # 获取除权除息后的价格和股数
+        price_in = xr_price_in if xr_price_in != 0 else price_in  # 如果除权除息后价格为0，则使用原价
+        amount = xr_amount if xr_price_in != 0 else amount  # 如果除权除息后价格为0，则使用原股数
         cost_fee = row['cost_fee']
         holding_df.loc[i, 'price_now'] = price_now
         holding_df.loc[i, 'price_in'] = price_in
@@ -475,13 +476,13 @@ def refresh_holding_list():
         rate_yearly = rate_current * 365 / holding_days  # 自然日历年化收益率
         rate_yearly = round(rate_yearly, 4)
         holding_df.loc[i, 'rate_yearly'] = rate_yearly
-        with lock:
-            holding_df.to_csv(HOLDING_LIST, index=False)
     
     # 多线程刷新holding_list.csv
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:
         executor.map(refresh_holding_list_row, idx_rows)
+    with lock:
+        holding_df.to_csv(HOLDING_LIST, index=False)
 
 # 持续扫描holding_list.csv, 卖出股票
 def scan_holding_list():
@@ -515,7 +516,7 @@ def scan_holding_list():
             return
         price_now = get_stock_realtime_price(row['ts_code'])
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
-        if price_now is None:
+        if price_now is None or price_now <= 0:
             return
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
@@ -552,6 +553,36 @@ def scan_holding_list():
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:
         executor.map(scan_holding_list_row, idx_rows)
+
+def refresh_buy_in_list():
+    """
+    对 buy_in_list.csv 中 buy_point_base 进行除权除息刷新
+    """
+    if not os.path.exists(BUY_IN_LIST):
+        return
+    buy_in_df = pd.read_csv(BUY_IN_LIST, dtype={'trade_date': str})
+
+    def refresh_buy_in_list_row(idx_row):
+        """
+        refresh buy_in_list single row infomation
+        :param idx_row: index, row
+        """
+        i, row = idx_row
+        ts_code = row['ts_code']
+        trade_date = row['trade_date']
+        buy_point_base = row['buy_point_base']
+        xr_price, xr_amount = get_XD_XR_DR_qfq_price_and_amount(
+            code=ts_code, pre_price=buy_point_base, amount=0, start=trade_date
+        )
+        if xr_price != 0:
+            buy_in_df.loc[i, 'buy_point_base'] = xr_price
+
+    # 多线程刷新buy_in_list.csv
+    idx_rows = list(buy_in_df.iterrows())
+    with ThreadPoolExecutor() as executor:
+        executor.map(refresh_buy_in_list_row, idx_rows)
+    with lock:
+        buy_in_df.to_csv(BUY_IN_LIST, index=False)
 
 def trade_process():
     """
