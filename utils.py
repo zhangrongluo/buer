@@ -8,6 +8,7 @@ import tushare as ts
 from DrissionPage import ChromiumOptions, Chromium
 from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS
 from cons_oversold import PAUSE
+from cons_hidden import xq_a_token
 
 
 # send wechat message
@@ -58,7 +59,8 @@ def get_stock_price_from_tencent(code: str) -> float | None:
     try:
         url = f"https://qt.gtimg.cn/q={stock_code}"
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+                (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
         }
         response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()  # 检查请求是否成功
@@ -92,6 +94,69 @@ def get_stock_realtime_price(code: str) -> float | None:
     else:
         time.sleep(PAUSE)
     return price_now
+
+def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=10) -> pd.DataFrame:
+    """
+    获取新浪财经今日历史实时价格数据(分钟数据)
+    :param code: 股票代码, 如 000001 或 000001.SZ, 要转换为 sh600000 或 sz000001 格式
+    :param scale: 分钟周期, 1(1分钟)、5(5分钟)、15(15分钟)、30(30分钟)、60(60分钟)
+    :param datalen: 返回的数据节点数量, 最大值为1023
+    :return: 实时价格数据序列或则空 DataFrame
+    NOTE:
+    url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?\
+    symbol=[股票代码]&scale=[分钟周期]&ma=no&datalen=[数据长度]'
+    ma=no 表示不返回均线数据
+    """
+    code = f'sh{code[:6]}' if code.startswith('6') else f'sz{code[:6]}'
+    url = f'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?\
+        symbol={code}&scale={scale}&ma=no&datalen={datalen}'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+            (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
+    response = requests.get(url, headers=headers)
+    data = response.json() if response.status_code == 200 else None
+    res_df = pd.DataFrame(data) if data else pd.DataFrame()
+    if not res_df.empty:
+        today = datetime.datetime.now().strftime('%Y-%m-%d')
+        res_df = res_df[res_df['day'].str.startswith(today)]
+        res_df[['open', 'high']] = res_df[['open', 'high']].apply(pd.to_numeric, errors='coerce')
+        res_df[['low', 'close']] = res_df[['low', 'close']].apply(pd.to_numeric, errors='coerce')
+        res_df = res_df[['day', 'open', 'high', 'low', 'close']]
+        res_df = res_df.reset_index(drop=True)
+    return res_df
+
+def get_history_realtime_price_DF_from_xueqiu(code, datalen=10) -> pd.DataFrame:
+    """
+    获取雪球今日历史实时价格数据(分钟数据)
+    :param code: 股票代码, 如 000001 或 600000.SH, 需要转换为 SZ000001 或 SH600000 格式
+    :param datalen: 返回的数据节点数量
+    :return: 实时价格数据序列或者空 DataFrame
+    NOTE:
+    url = 'https://stock.xueqiu.com/v5/stock/chart/minute.json?symbol=[股票代码]&period=1d'
+    period: '1d' 表示获取当天的分钟数据
+    """
+    code = f'SZ{code[:6]}' if code.startswith('0') else f'SH{code[:6]}'
+    url = f'https://stock.xueqiu.com/v5/stock/chart/minute.json?symbol={code}&period=1d'
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+            (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+        'Cookie': xq_a_token
+    }
+    response = requests.get(url, headers=headers)
+    data = response.json() if response.status_code == 200 else None
+    res = data['data']['items'] if data else None
+    res_df = pd.DataFrame(res) if res else pd.DataFrame(columns=['day', 'close', 'high', 'low'])
+    if not res_df.empty:
+        res_df = res_df[['timestamp', 'current', 'high', 'low']]
+        res_df['timestamp'] = res_df['timestamp'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1000))
+        res_df['timestamp'] = res_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        res_df.columns = ['day', 'close', 'high', 'low']
+        res_df = res_df.tail(datalen)
+        res_df = res_df.reset_index(drop=True)
+    else:
+        print(f'获取雪球数据失败:{response.status_code},请检查 token 设置、网络连接或是否为交易日')
+    return res_df
 
 def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
     """

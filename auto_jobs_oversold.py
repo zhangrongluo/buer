@@ -13,7 +13,7 @@ from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_XD_XR_DR_dividend_data
 from trade_oversold import trade_process, refresh_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR
-from cons_oversold import params_list, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, TEST_DATASET_PERCENT, MODEL_NAME
+from cons_oversold import dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, TEST_DATASET_PERCENT, MODEL_NAME
 from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_data_csv, merge_all_oversold_dataset
 
 import warnings
@@ -50,7 +50,7 @@ def update_dataset():
     last_cal_date = trade_cal.iloc[0]['cal_date']
     print('最新交易日期:', last_cal_date)
 
-    for param in params_list:
+    for param in dataset_to_update:
         FORWARD_DAYS = param['FORWARD_DAYS']
         BACKWARD_DAYS = param['BACKWARD_DAYS']
         DOWN_FILTER = param['DOWN_FILTER']
@@ -159,11 +159,18 @@ def train_dataset():
         def get_model(depth: int = 6, drop_rate: float = 0.5):
             inputs = keras.Input(shape=(x_train_valid.shape[1],))
             feature = layers.BatchNormalization()(inputs)
+            residual = feature
             for dep in range(depth+3, 4, -1):
                 feature = layers.Dense(2**dep, activation='relu')(feature)
                 feature = layers.Dropout(drop_rate)(feature)
                 if dep % 3 == 0:
                     feature = layers.BatchNormalization()(feature)
+                if dep == 7:  # 残差连接
+                    if feature.shape[1] != residual.shape[1]:
+                        residual = layers.Dense(2**dep)(residual)
+                        feature = layers.add([feature, residual])
+                    else:
+                        feature = layers.add([feature, residual])
             outputs = layers.Dense(1)(feature)
             model = keras.Model(inputs, outputs)
             optimizer = random.choice(['adam', 'rmsprop'])

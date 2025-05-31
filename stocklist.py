@@ -73,6 +73,7 @@ def get_up_down_limit_list():
     """
     today = datetime.date.today().strftime('%Y%m%d')
     up_down_limit_df = pro.stk_limit(trade_date=today)
+    up_down_limit_df = up_down_limit_df.dropna(how='any')  # drop rows with any NaN values
     up_down_limit_df.to_excel(UP_DOWN_LIMIT_XLS, index=False)
 
 if __name__ == '__main__':

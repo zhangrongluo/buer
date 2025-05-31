@@ -11,9 +11,11 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST,
                             DAILY_PROFIT, FUNDS_LIST, TRADE_LOG)
-from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, UP_DOWN_LIMIT_XLS
+from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
-from utils import send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, get_XD_XR_DR_qfq_price_and_amount, get_up_down_limit
+from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
+                   get_XD_XR_DR_qfq_price_and_amount, get_up_down_limit, get_history_realtime_price_DF_from_sina, 
+                   get_history_realtime_price_DF_from_xueqiu)
 
 
 backup_dir = f'{BACKUP_DIR}/oversold'
@@ -373,7 +375,7 @@ def scan_buy_in_list():
         if price_now <= MIN_STOCK_PRICE:
             return
         down_limit = get_up_down_limit(code=code)[1]
-        if down_limit is not None and abs(price_now - down_limit) <= 0.05:  # if down limit, dont buy in 
+        if down_limit is not None and price_now / down_limit <= 1.01:  # if nearly down limit, dont buy in 
             return
         # wait for the down trend to end
         if waiting_days <= MIN_WAITING_DAYS:  
@@ -395,6 +397,15 @@ def scan_buy_in_list():
             return
         amount = calculate_buy_in_amount(funds=ONE_TIME_FUNDS, price=price_now)
         if amount == 0:
+            return
+        # if price is decreasing, dont buy in
+        rt_price_df = get_history_realtime_price_DF_from_sina(code=code)
+        if rt_price_df.empty:  # secondly get real-time price from xueqiu
+            rt_price_df = get_history_realtime_price_DF_from_xueqiu(code=code)
+        if rt_price_df.empty:
+            return
+        rt_price_mean = rt_price_df['close'].mean()
+        if price_now - rt_price_mean < -0.01:
             return
         with lock:
             buy_in(code, price_now, amount, trade_date, buy_point_base, target_rate)
@@ -522,7 +533,7 @@ def scan_holding_list():
         if price_now is None or price_now <= 0:
             return
         up_limit = get_up_down_limit(code=row['ts_code'])[0]
-        if up_limit is not None and abs(price_now - up_limit) <= 0.05:  # if up limit, dont sell out
+        if up_limit is not None and price_now / up_limit >= 0.99:  # if nearly up limit, dont sell out
             return
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
@@ -533,6 +544,14 @@ def scan_holding_list():
         base_point = row['buy_point_base']
         target_rate = row['target_rate']
         if price_now >= base_point * (1 + target_rate):
+            rt_price_df = get_history_realtime_price_DF_from_sina(code=row['ts_code'])
+            if rt_price_df.empty:  # secondly, try xueqiu
+                rt_price_df = get_history_realtime_price_DF_from_xueqiu(code=row['ts_code'])
+            if rt_price_df.empty:
+                return
+            rt_price_mean = rt_price_df['close'].mean()  # 10 minute average realtime price
+            if price_now - rt_price_mean >= 0.01: # price is rising, dont sell out
+                return
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         # if rate_current <= MAX_DOWN_LIMIT, sell out
