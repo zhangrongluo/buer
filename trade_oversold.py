@@ -107,15 +107,11 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base
               'rate_current', 'rate_yearly', 'status']
     new_row = pd.DataFrame([row_data, ], columns=column)
     # adjust stock numbers signal and cash amount
-    global HOLDING_STOCKS
-    if HOLDING_STOCKS >= MAX_STOCKS:
-        return
-    HOLDING_STOCKS += 1
     cash_amount_buy = round(price * (1 + cost_fee) * amount, 2)
     note = f'买入 {code} {stock_name} at {price} total {amount}'
     res = create_or_update_funds_change_list(-cash_amount_buy, note)
     if not res:  # cash balance is not enough
-        HOLDING_STOCKS -= 1
+        trade_log.error(f'买入{code} {stock_name}失败:可用资金不足')
         return
     new_row.to_csv(HOLDING_LIST, mode='a', header=False, index=False)
     now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
@@ -182,10 +178,6 @@ def sell_out(code: str, price: float, trade_date: str) -> None:
     cash_amount_sell = round(price * (1 - cost_fee) * amount, 2)
     note = f'卖出 {code} {stock_name} at {price} total {amount}'
     create_or_update_funds_change_list(cash_amount_sell, note)
-    global HOLDING_STOCKS
-    if HOLDING_STOCKS <= 0:
-        return
-    HOLDING_STOCKS -= 1
     holding_df.to_csv(HOLDING_LIST, index=False)
     now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
     trade_log.info(f'卖出 {code} {stock_name} {industry} at {price} at {now}')
@@ -390,11 +382,6 @@ def scan_buy_in_list():
         price_max = get_max_price_between_today_and_trade_date(idx_row)
         if price_max >= buy_point_base * (1 + target_rate * WAITING_RATE_PCT):
             return
-        # if holding_stocks >= MAX_STOCKS, skip
-        # holding_stocks = holding_df[holding_df['status'] == 'holding'].shape[0]
-        global HOLDING_STOCKS
-        if HOLDING_STOCKS >= MAX_STOCKS:
-            return
         amount = calculate_buy_in_amount(funds=ONE_TIME_FUNDS, price=price_now)
         if amount == 0:
             return
@@ -408,6 +395,11 @@ def scan_buy_in_list():
         if price_now - rt_price_mean < -0.01:
             return
         with lock:
+            # under lock, avoid holding_stocks >= MAX_STOCKS
+            global HOLDING_STOCKS
+            if HOLDING_STOCKS >= MAX_STOCKS:
+                return
+            HOLDING_STOCKS += 1
             buy_in(code, price_now, amount, trade_date, buy_point_base, target_rate)
 
     # 多线程扫描buy_in_list.csv
@@ -539,6 +531,10 @@ def scan_holding_list():
         days = row['days']
         if days >= MAX_TRADE_DAYS:
             with lock:
+                global HOLDING_STOCKS
+                if HOLDING_STOCKS <= 0:
+                    return
+                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         # if reach the target rate, sell out
         base_point = row['buy_point_base']
@@ -553,6 +549,10 @@ def scan_holding_list():
             if price_now - rt_price_mean >= 0.01: # price is rising, dont sell out
                 return
             with lock:
+                global HOLDING_STOCKS
+                if HOLDING_STOCKS <= 0:
+                    return
+                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         # if rate_current <= MAX_DOWN_LIMIT, sell out
         rate_current = row['rate_current']
@@ -566,12 +566,24 @@ def scan_holding_list():
         rate_yearly = row['rate_yearly']
         if 30 >= holding_days > 15 and rate_yearly >= 4.5:
             with lock:
+                global HOLDING_STOCKS
+                if HOLDING_STOCKS <= 0:
+                    return
+                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         if 60 >= holding_days > 30 and rate_yearly >= 3.0:
             with lock:
+                global HOLDING_STOCKS
+                if HOLDING_STOCKS <= 0:
+                    return
+                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         if 90 >= holding_days > 60 and rate_yearly >= 2.4:
             with lock:
+                global HOLDING_STOCKS
+                if HOLDING_STOCKS <= 0:
+                    return
+                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
     
     # 多线程扫描holding_list.csv
