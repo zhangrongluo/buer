@@ -349,6 +349,7 @@ def scan_buy_in_list():
         am_end = datetime.time(11, 30)
         pm_begin = datetime.time(13, 0)
         pm_end = datetime.time(14, 55)
+        global HOLDING_STOCKS
         if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
             return
         i, row = idx_row
@@ -396,7 +397,6 @@ def scan_buy_in_list():
             return
         with lock:
             # under lock, avoid holding_stocks >= MAX_STOCKS
-            global HOLDING_STOCKS
             if HOLDING_STOCKS >= MAX_STOCKS:
                 return
             HOLDING_STOCKS += 1
@@ -510,6 +510,7 @@ def scan_holding_list():
         am_end = datetime.time(11, 30)
         pm_begin = datetime.time(13, 0)
         pm_end = datetime.time(14, 55)
+        global HOLDING_STOCKS
         if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
             return
         i, row = idx_row
@@ -531,7 +532,6 @@ def scan_holding_list():
         days = row['days']
         if days >= MAX_TRADE_DAYS:
             with lock:
-                global HOLDING_STOCKS
                 if HOLDING_STOCKS <= 0:
                     return
                 HOLDING_STOCKS -= 1
@@ -549,7 +549,6 @@ def scan_holding_list():
             if price_now - rt_price_mean >= 0.01: # price is rising, dont sell out
                 return
             with lock:
-                global HOLDING_STOCKS
                 if HOLDING_STOCKS <= 0:
                     return
                 HOLDING_STOCKS -= 1
@@ -566,21 +565,18 @@ def scan_holding_list():
         rate_yearly = row['rate_yearly']
         if 30 >= holding_days > 15 and rate_yearly >= 4.5:
             with lock:
-                global HOLDING_STOCKS
                 if HOLDING_STOCKS <= 0:
                     return
                 HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         if 60 >= holding_days > 30 and rate_yearly >= 3.0:
             with lock:
-                global HOLDING_STOCKS
                 if HOLDING_STOCKS <= 0:
                     return
                 HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         if 90 >= holding_days > 60 and rate_yearly >= 2.4:
             with lock:
-                global HOLDING_STOCKS
                 if HOLDING_STOCKS <= 0:
                     return
                 HOLDING_STOCKS -= 1

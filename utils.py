@@ -160,9 +160,9 @@ def get_history_realtime_price_DF_from_xueqiu(code, datalen=10) -> pd.DataFrame:
 
 def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
     """
-    计算除权除息后的价格序列(前复权)
+    计算除权除息后的价格序列(前复权),并对change、pct_chg字段重新计算.
     :param src_data: basicdata/dailydata下日行情数据(按trade_date升序排列)
-    :return: src_data(open、high、low、close)除权除息前的价格序列(按trade_date升序排列)
+    :return: src_data(open、high、low、close、pre_close)除权除息前的价格序列(按trade_date升序排列)
     NOTE: 
     xr_price = (pre_price - cash_divdend_per_stock) / (1 + div_per_stock)
     div_per_stock: 每股转送股数
@@ -171,6 +171,8 @@ def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
     XD:除息 XR:转送股除权 DR:除息及除权, 未考虑配股除权
     """
     src_data_cp = src_data.copy()
+    src_data_cp = src_data_cp.sort_values(by='trade_date', ascending=True)  # 升序排列
+    src_data_cp.reset_index(drop=True, inplace=True)  # 重置索引
     ts_code = src_data_cp['ts_code'].iloc[0]
     dividend_csv = f'{FINANDATA_DIR}/dividend/{ts_code}.csv'
     if not os.path.exists(dividend_csv):
@@ -192,8 +194,14 @@ def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
         div_per_stock = row['stk_div'] if pd.notna(row['stk_div']) else 0
         cash_dividend_per_stock = row['cash_div_tax'] if pd.notna(row['cash_div_tax']) else 0
         idx = src_data_cp[src_data_cp['trade_date'] == ex_date].index[0]
-        src_data_cp.loc[:idx-1, ['open', 'high', 'low', 'close']] = \
-            (src_data_cp.loc[:idx-1, ['open', 'high', 'low', 'close']] - cash_dividend_per_stock) / (1 + div_per_stock)
+        src_data_cp.loc[:idx-1, ['open', 'high', 'low']] = \
+            (src_data_cp.loc[:idx-1, ['open', 'high', 'low']] - cash_dividend_per_stock) / (1 + div_per_stock)
+        src_data_cp.loc[:idx-1, ['close', 'pre_close']] = \
+            (src_data_cp.loc[:idx-1, ['close', 'pre_close']] - cash_dividend_per_stock) / (1 + div_per_stock)
+        src_data_cp.loc[:idx-1, 'change'] = \
+            src_data_cp.loc[:idx-1, 'close'] - src_data_cp.loc[:idx-1, 'pre_close']
+        src_data_cp.loc[:idx-1, 'pct_chg'] = \
+            src_data_cp.loc[:idx-1, 'change'] / src_data_cp.loc[:idx-1, 'pre_close']
     return src_data_cp
 
 def get_XD_XR_DR_qfq_price_and_amount(code, pre_price, amount, start:str, end:str = None) -> tuple[float, float]:
