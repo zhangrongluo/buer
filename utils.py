@@ -208,8 +208,8 @@ def get_XD_XR_DR_qfq_price_and_amount(code, pre_price, amount, start:str, end:st
     """
     将start日pre_price和股数转换到end日除权除息后的价格和股数(前复权)
     :param code: 股票代码, 如 000001 或 000001.SZ
-    :param pre_price: 未复权的价格
-    :param amount: 未复权的股数
+    :param pre_price: 未除权的价格
+    :param amount: 未除权的股数
     :param start: 起始日期(YYYYMMDD)
     :param end: 结束日期(YYYYMMDD), None表示到今天
     :return: (end日除权除息后的价格, end日除权除息后的股数)

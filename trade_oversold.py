@@ -111,7 +111,6 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base
     note = f'买入 {code} {stock_name} at {price} total {amount}'
     res = create_or_update_funds_change_list(-cash_amount_buy, note)
     if not res:  # cash balance is not enough
-        trade_log.error(f'买入{code} {stock_name}失败:可用资金不足')
         return
     new_row.to_csv(HOLDING_LIST, mode='a', header=False, index=False)
     now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
@@ -467,8 +466,8 @@ def refresh_holding_list():
         xr_price_in, xr_amount = get_XD_XR_DR_qfq_price_and_amount(
             code=ts_code, pre_price=price_in, amount=amount, start=date_in
         )  # 获取除权除息后的价格和股数
-        price_in = xr_price_in if xr_price_in != 0 else price_in  # 如果除权除息后价格为0，则使用原价
-        amount = xr_amount if xr_price_in != 0 else amount  # 如果除权除息后价格为0，则使用原股数
+        price_in = xr_price_in if xr_price_in > 0 else price_in  # 如果除权除息后价格为0，则使用原价
+        amount = xr_amount if xr_price_in > 0 else amount  # 如果除权除息后价格为0，则使用原股数
         cost_fee = row['cost_fee']
         holding_df.loc[i, 'price_now'] = price_now
         holding_df.loc[i, 'price_in'] = price_in
@@ -557,6 +556,9 @@ def scan_holding_list():
         rate_current = row['rate_current']
         if rate_current <= MAX_DOWN_LIMIT:
             with lock:
+                if HOLDING_STOCKS <= 0:
+                    return
+                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         # if rate_yearly > target_rate_yearly, sell out in advance
         # 30 >= holding_days > 15, rate_yearly >= 4.5, sell out
@@ -607,7 +609,7 @@ def refresh_buy_in_list():
         xr_price, xr_amount = get_XD_XR_DR_qfq_price_and_amount(
             code=ts_code, pre_price=buy_point_base, amount=0, start=trade_date
         )
-        if xr_price != 0:
+        if xr_price > 0:
             buy_in_df.loc[i, 'buy_point_base'] = xr_price
 
     # 多线程刷新buy_in_list.csv
