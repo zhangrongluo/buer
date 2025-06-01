@@ -1,5 +1,5 @@
 # cons
-MODEL_NAME = 'DowngapStrategy(test)'
+MODEL_NAME = 'DowngapStrategy'
 MAX_TRADE_DAYS = 50  # 最大缺口回补天数，即最大持有天数(不含今日),影响训练集的长度
 TEST_DATASET_PERCENT = 0.20  # 测试集占训练集的比例
 TRADE_COVERAGE_DAYS = 30  # 即买入清单中记录的保留天数，即买入观察天数(不含今日)，影响交易集的长度
@@ -7,7 +7,7 @@ MIN_PRED_RATE = 0.15  # 预期收益率下限，用于筛选交易数据集，�
 PRED_RATE_PCT = 0.9 # 预期收益率折扣百分比
 SHUFFLE = False  # 是否打乱测试集
 COST_FEE = 0.0005  # 交易费用和佣金比例
-MAX_STOCKS = 72  # 最大持仓股票数
+MAX_STOCKS = 75  # 最大持仓股票数
 ONE_TIME_FUNDS = 60000  # 单次买入资金
 MIN_STOCK_PRICE = 2.88 # 最低股票买入价格，低于此价格不买入
 PRED_MODELS = 12  # 预测交易集的模型数
