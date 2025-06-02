@@ -12,7 +12,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from trade_downgap import trade_process
 from datasets_downgap import get_gaps_statistic_data, refresh_the_gap_csv, merge_all_gap_data
 from cons_general import TRADE_CAL_XLS, TEMP_DIR, MODELS_DIR, PREDICT_DIR, TRADE_DIR, BASICDATA_DIR, DATASETS_DIR
-from cons_downgap import exception_list, MAX_TRADE_DAYS, TEST_DATASET_PERCENT, TRADE_COVERAGE_DAYS, MIN_PRED_RATE, SHUFFLE, PRED_MODELS, PRED_RATE_PCT, MODEL_NAME
+from cons_downgap import (exception_list, MAX_TRADE_DAYS, TEST_DATASET_PERCENT, TRADE_COVERAGE_DAYS, MIN_PRED_RATE, 
+                          SHUFFLE, PRED_MODELS, PRED_RATE_PCT, MODEL_NAME)
 from stocklist import get_all_stocks_info
 
 import warnings
