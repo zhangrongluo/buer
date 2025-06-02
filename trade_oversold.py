@@ -313,7 +313,7 @@ def scan_buy_in_list():
     # select the last day's data of a down trend
     buy_in_df = buy_in_df.sort_values(by=['ts_code', 'trade_date'], ascending=[True, True])
     buy_in_df = buy_in_df.drop_duplicates(subset='ts_code', keep='last')
-    # delete rows in holding_df with same ts_code and status is holding from buy_in_df
+    # save rows which are not in holding_df with same ts_code and holding status
     rows_not_holding = []
     for i, row in buy_in_df.iterrows():
         code = row['ts_code']
@@ -348,7 +348,6 @@ def scan_buy_in_list():
         am_end = datetime.time(11, 30)
         pm_begin = datetime.time(13, 0)
         pm_end = datetime.time(14, 55)
-        global HOLDING_STOCKS
         if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
             return
         i, row = idx_row
@@ -359,7 +358,7 @@ def scan_buy_in_list():
         target_rate = row['pred']  # 预期收益率
         waiting_days = row['waiting_days']
         price_now = get_stock_realtime_price(code)
-        print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
+        print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
         if price_now is None or price_now <= 0:
             return
         if price_now >= buy_point_base:
@@ -389,11 +388,11 @@ def scan_buy_in_list():
         decreasing_or_not = is_decreasing_or_not(code=code, price_now=price_now)
         if decreasing_or_not:  # if decreasing, dont buy in
             return
+        # 优化：实时获取持仓数量，避免多线程下全局变量不同步
         with lock:
-            # under lock, avoid holding_stocks >= MAX_STOCKS
-            if HOLDING_STOCKS >= MAX_STOCKS:
+            current_holding_stocks = _get_holding_stocks_number()
+            if current_holding_stocks >= MAX_STOCKS:
                 return
-            HOLDING_STOCKS += 1
             buy_in(code, price_now, amount, trade_date, buy_point_base, target_rate)
 
     # 多线程扫描buy_in_list.csv
@@ -449,7 +448,7 @@ def refresh_holding_list():
         holding_df.loc[i, 'days'] = days
         # price_now, price_in, amount, profit, rate_current, rate_yearly
         price_now = get_stock_realtime_price(row['ts_code'])
-        print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
+        print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
         if price_now is None:
             with lock:
                 holding_df.to_csv(HOLDING_LIST, index=False)
@@ -504,7 +503,6 @@ def scan_holding_list():
         am_end = datetime.time(11, 30)
         pm_begin = datetime.time(13, 0)
         pm_end = datetime.time(14, 55)
-        global HOLDING_STOCKS
         if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
             return
         i, row = idx_row
@@ -516,7 +514,7 @@ def scan_holding_list():
         if holding_days == 1:
             return
         price_now = get_stock_realtime_price(row['ts_code'])
-        print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
+        print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
         if price_now is None or price_now <= 0:
             return
         # if nearly up limit, dont sell out
@@ -531,37 +529,25 @@ def scan_holding_list():
         days = row['days']
         if days >= MAX_TRADE_DAYS:
             with lock:
-                if HOLDING_STOCKS <= 0:
-                    return
-                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         # if rate_current <= MAX_DOWN_LIMIT, sell out
         rate_current = row['rate_current']
         if rate_current <= MAX_DOWN_LIMIT:
             with lock:
-                if HOLDING_STOCKS <= 0:
-                    return
-                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         # if reach the target rate, sell out
         base_point = row['buy_point_base']
         target_rate = row['target_rate']
         if price_now >= base_point * (1 + target_rate):
             with lock:
-                if HOLDING_STOCKS <= 0:
-                    return
-                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
         # sell out early or not
         rate_yearly = row['rate_yearly']
         early_or_not = early_sell_standard(holding_days, rate_current, rate_yearly)
         if early_or_not:
             with lock:
-                if HOLDING_STOCKS <= 0:
-                    return
-                HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
-    
+
     # 多线程扫描holding_list.csv
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:
