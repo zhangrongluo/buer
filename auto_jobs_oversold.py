@@ -13,7 +13,8 @@ from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_XD_XR_DR_dividend_data
 from trade_oversold import trade_process, refresh_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR
-from cons_oversold import dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, TEST_DATASET_PERCENT, MODEL_NAME
+from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
+                           TEST_DATASET_PERCENT, MODEL_NAME)
 from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_data_csv, merge_all_oversold_dataset
 
 import warnings
@@ -33,7 +34,7 @@ def is_trade_day(func):
             return func(*args, **kwargs)
         else:
             today = datetime.datetime.now().strftime('%Y%m%d')
-            print(f'({MODEL_NAME}) {today}不是交易日')
+            print(f'({MODEL_NAME}) {today} 不是交易日')
     return wrapper
 
 def update_dataset():
