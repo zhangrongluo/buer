@@ -5,6 +5,7 @@ import pandas as pd
 import datetime
 import requests
 import tushare as ts
+from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
 from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS
 from cons_oversold import PAUSE
@@ -277,6 +278,79 @@ def get_up_down_limit(code: str) -> tuple[float, float]:
     up_limit = res_df['up_limit'].values[0]
     down_limit = res_df['down_limit'].values[0]
     return up_limit, down_limit
+
+def early_sell_standard(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
+    """
+    提前卖出标准
+    :param holding_days: 持有天数
+    :param rate_current: 当前收益率
+    :param rate_yearly: 年化收益率
+    :return: True if should sell, False otherwise
+    NOTE:
+    holding_days < 15 and rate_current >= 0.30
+    30 > holding_days >= 15 and rate_yearly >= 4.46
+    60 > holding_days >= 30 and rate_yearly >= 2.63
+    90 > holding_days >= 60 and rate_yearly >= 1.83
+    rate_yearly 按照年 365 天计算
+    4.46 = 365/((15+30)/2)*((0.25+0.30)/2)
+    2.63 = 365/((30+60)/2)*((0.30+0.35)/2)
+    1.83 = 365/((60+90)/2)*((0.35+0.40)/2)
+    """
+    if holding_days < 15 and rate_current >= 0.30:
+        return True
+    elif 15 <= holding_days < 30 and rate_yearly >= 4.46:
+        return True
+    elif 30 <= holding_days < 60 and rate_yearly >= 2.63:
+        return True
+    elif 60 <= holding_days < 90 and rate_yearly >= 1.83:
+        return True
+    return False
+
+def is_rising_or_not(code, price_now: float, method: Literal['max', 'mean'] = 'mean') -> bool:
+    """
+    判断股票是否上涨
+    :param code: 股票代码, 如 000001 或 000001.SZ
+    :param price_now: 当前价格
+    :param method: 判断方法, 'max' 或 'mean', 默认 'mean'
+    :return: True if stock is rising, False otherwise
+    NOTE:
+    如果 price_now 超过前 10 分钟平均价(最高价), 则认为上涨
+    """
+    if len(code) == 6:
+        code = code + '.SH' if code.startswith('6') else code + '.SZ'
+    rt_price_df = get_history_realtime_price_DF_from_sina(code)
+    if rt_price_df.empty:
+        rt_price_df = get_history_realtime_price_DF_from_xueqiu(code)
+    if rt_price_df.empty:
+        return False
+    if method == 'mean':
+        return price_now > rt_price_df['close'].mean()
+    elif method == 'max':
+        return price_now > rt_price_df['close'].max()
+    return False
+
+def is_decreasing_or_not(code, price_now: float, method: Literal['min', 'mean'] = 'mean') -> bool:
+    """
+    判断股票是否下跌
+    :param code: 股票代码, 如 000001 或 000001.SZ
+    :param price_now: 当前价格
+    :param method: 判断方法, 'min' 或 'mean', 默认 'mean'
+    :return: True if stock is decreasing, False otherwise
+    NOTE:
+    如果 price_now 低于前 10 分钟平均价(最低价), 则认为下跌
+    """
+    if len(code) == 6:
+        code = code + '.SH' if code.startswith('6') else code + '.SZ'
+    rt_price_df = get_history_realtime_price_DF_from_sina(code)
+    if rt_price_df.empty:
+        rt_price_df = get_history_realtime_price_DF_from_xueqiu(code)
+    if rt_price_df.empty:
+        return False
+    if method == 'mean':
+        return price_now < rt_price_df['close'].mean()
+    elif method == 'min':
+        return price_now < rt_price_df['close'].min()
+    return False
 
 def is_trade_date_or_not():
     """ 

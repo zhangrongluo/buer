@@ -45,7 +45,7 @@ def is_trade_day(func):
             return func(*args, **kwargs)
         else:
             today = datetime.datetime.now().strftime('%Y%m%d')
-            print(f'({MODEL_NAME}) {today} 不是交易日')
+            print(f'({MODEL_NAME}) {today}不是交易日')
     return wrapper
 
 def update_dataset():

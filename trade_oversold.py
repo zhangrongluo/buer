@@ -14,8 +14,8 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
-                   get_XD_XR_DR_qfq_price_and_amount, get_up_down_limit, get_history_realtime_price_DF_from_sina, 
-                   get_history_realtime_price_DF_from_xueqiu)
+                   get_XD_XR_DR_qfq_price_and_amount, get_up_down_limit, early_sell_standard, is_rising_or_not, 
+                   is_decreasing_or_not)
 
 
 backup_dir = f'{BACKUP_DIR}/oversold'
@@ -386,13 +386,8 @@ def scan_buy_in_list():
         if amount == 0:
             return
         # if price is decreasing, dont buy in
-        rt_price_df = get_history_realtime_price_DF_from_sina(code=code)
-        if rt_price_df.empty:  # secondly get real-time price from xueqiu
-            rt_price_df = get_history_realtime_price_DF_from_xueqiu(code=code)
-        if rt_price_df.empty:
-            return
-        rt_price_mean = rt_price_df['close'].mean()
-        if price_now - rt_price_mean < -0.01:
+        decreasing_or_not = is_decreasing_or_not(code=code, price_now=price_now)
+        if decreasing_or_not:  # if decreasing, dont buy in
             return
         with lock:
             # under lock, avoid holding_stocks >= MAX_STOCKS
@@ -524,29 +519,17 @@ def scan_holding_list():
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
         if price_now is None or price_now <= 0:
             return
+        # if nearly up limit, dont sell out
         up_limit = get_up_down_limit(code=row['ts_code'])[0]
-        if up_limit is not None and price_now / up_limit >= 0.99:  # if nearly up limit, dont sell out
+        if up_limit is not None and price_now / up_limit >= 0.99:
+            return
+        # if rising now, dont sell out
+        rising_or_not = is_rising_or_not(row['ts_code'], price_now)
+        if rising_or_not:  # if rising, dont sell out
             return
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
         if days >= MAX_TRADE_DAYS:
-            with lock:
-                if HOLDING_STOCKS <= 0:
-                    return
-                HOLDING_STOCKS -= 1
-                sell_out(row['ts_code'], price_now, row['trade_date'])
-        # if reach the target rate, sell out
-        base_point = row['buy_point_base']
-        target_rate = row['target_rate']
-        if price_now >= base_point * (1 + target_rate):
-            rt_price_df = get_history_realtime_price_DF_from_sina(code=row['ts_code'])
-            if rt_price_df.empty:  # secondly, try xueqiu
-                rt_price_df = get_history_realtime_price_DF_from_xueqiu(code=row['ts_code'])
-            if rt_price_df.empty:
-                return
-            rt_price_mean = rt_price_df['close'].mean()  # 10 minute average realtime price
-            if price_now - rt_price_mean >= 0.01: # price is rising, dont sell out
-                return
             with lock:
                 if HOLDING_STOCKS <= 0:
                     return
@@ -560,24 +543,19 @@ def scan_holding_list():
                     return
                 HOLDING_STOCKS -= 1
                 sell_out(row['ts_code'], price_now, row['trade_date'])
-        # if rate_yearly > target_rate_yearly, sell out in advance
-        # 30 >= holding_days > 15, rate_yearly >= 4.5, sell out
-        # 60 >= holding_days > 30, rate_yearly >= 3.0, sell out
-        # 90 >= holding_days > 60, rate_yearly >= 2.4, sell out
+        # if reach the target rate, sell out
+        base_point = row['buy_point_base']
+        target_rate = row['target_rate']
+        if price_now >= base_point * (1 + target_rate):
+            with lock:
+                if HOLDING_STOCKS <= 0:
+                    return
+                HOLDING_STOCKS -= 1
+                sell_out(row['ts_code'], price_now, row['trade_date'])
+        # sell out early or not
         rate_yearly = row['rate_yearly']
-        if 30 >= holding_days > 15 and rate_yearly >= 4.5:
-            with lock:
-                if HOLDING_STOCKS <= 0:
-                    return
-                HOLDING_STOCKS -= 1
-                sell_out(row['ts_code'], price_now, row['trade_date'])
-        if 60 >= holding_days > 30 and rate_yearly >= 3.0:
-            with lock:
-                if HOLDING_STOCKS <= 0:
-                    return
-                HOLDING_STOCKS -= 1
-                sell_out(row['ts_code'], price_now, row['trade_date'])
-        if 90 >= holding_days > 60 and rate_yearly >= 2.4:
+        early_or_not = early_sell_standard(holding_days, rate_current, rate_yearly)
+        if early_or_not:
             with lock:
                 if HOLDING_STOCKS <= 0:
                     return

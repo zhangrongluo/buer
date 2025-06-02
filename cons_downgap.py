@@ -1,5 +1,5 @@
 # cons
-MODEL_NAME = 'DowngapStrategy'
+MODEL_NAME = 'Downgap Strategy'  # 模型名称
 MAX_TRADE_DAYS = 50  # 最大缺口回补天数，即最大持有天数(不含今日),影响训练集的长度
 TEST_DATASET_PERCENT = 0.20  # 测试集占训练集的比例
 TRADE_COVERAGE_DAYS = 30  # 即买入清单中记录的保留天数，即买入观察天数(不含今日)，影响交易集的长度
