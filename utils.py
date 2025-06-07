@@ -7,7 +7,7 @@ import requests
 import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
-from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS
+from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR
 from cons_oversold import PAUSE
 from cons_hidden import xq_a_token
 
@@ -170,6 +170,8 @@ def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
     cash_dividend_per_stock: 每股派息税前金额
     如有多次除权除息,按实施时间顺序从前到后依次计算(前复权)
     XD:除息 XR:转送股除权 DR:除息及除权, 未考虑配股除权
+    NOTE:
+    暂停使用, 直接使用get_qfq_price_DF_by_adj_factor计算前复权价格
     """
     src_data_cp = src_data.copy()
     src_data_cp = src_data_cp.sort_values(by='trade_date', ascending=True)  # 升序排列
@@ -205,22 +207,60 @@ def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
             src_data_cp.loc[:idx-1, 'change'] / src_data_cp.loc[:idx-1, 'pre_close']
     return src_data_cp
 
-def get_XD_XR_DR_qfq_price_and_amount(code, pre_price, amount, start:str, end:str = None) -> tuple[float, float]:
+def get_qfq_price_DF_by_adj_factor(src_data: pd.DataFrame) -> pd.DataFrame:
     """
-    将start日pre_price和股数转换到end日除权除息后的价格和股数(前复权)
+    通过复权因子计算前复权价格序列
+    :param src_data: basicdata/dailydata下日行情数据(按trade_date升序排列)
+    :return: src_data(open、high、low、close、pre_close、change、pct_chg)
+    前复权的价格序列(按trade_date升序排列)
+    NOTE:
+    复权后价格为空的行被删除
+    """
+    src_data_cp = src_data.copy()
+    src_data_cp = src_data_cp.sort_values(by='trade_date', ascending=True)  # 升序排列
+    src_data_cp.reset_index(drop=True, inplace=True)  # 重置索引
+    ts_code = src_data_cp['ts_code'].iloc[0]
+    factor_csv = f'{BASICDATA_DIR}/adjfactor/{ts_code}.csv'
+    if not os.path.exists(factor_csv):
+        return src_data_cp
+    factor_df = pd.read_csv(factor_csv, dtype={'trade_date': str})
+    if factor_df.empty:
+        return src_data_cp
+    factor_df = factor_df.sort_values(by='trade_date', ascending=True)  # 升序排列
+    factor_df.reset_index(drop=True, inplace=True)  # 重置索引
+    # merge src_data_cp with factor_df on trade_date
+    src_data_cp = pd.merge(src_data_cp, factor_df[['trade_date', 'adj_factor']], on='trade_date', how='left')
+    last_adj_factor = factor_df['adj_factor'].iloc[-1]
+    src_data_cp['last_adj_factor'] = last_adj_factor
+    src_data_cp['cal_factor'] = src_data_cp['adj_factor'] / last_adj_factor
+    src_data_cp['open'] = src_data_cp['open'] * src_data_cp['cal_factor']
+    src_data_cp['high'] = src_data_cp['high'] * src_data_cp['cal_factor']
+    src_data_cp['low'] = src_data_cp['low'] * src_data_cp['cal_factor']
+    src_data_cp['close'] = src_data_cp['close'] * src_data_cp['cal_factor']
+    src_data_cp['pre_close'] = src_data_cp['pre_close'] * src_data_cp['cal_factor']
+    src_data_cp.dropna(subset=['open', 'high', 'low', 'close', 'pre_close'], inplace=True)
+    src_data_cp.drop(columns=['adj_factor', 'last_adj_factor', 'cal_factor'], inplace=True)
+    src_data_cp['change'] = src_data_cp['close'] - src_data_cp['pre_close']
+    src_data_cp['pct_chg'] = src_data_cp['change'] / src_data_cp['pre_close'] * 100
+    src_data_cp[['open', 'high', 'low', 'close', 'pre_close', 'change']] = \
+        src_data_cp[['open', 'high', 'low', 'close', 'pre_close', 'change']].round(2)
+    src_data_cp['pct_chg'] = src_data_cp['pct_chg'].round(4)
+    return src_data_cp
+
+def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = None) -> float:
+    """
+    根据XR送转股比例将start日股数转换到end日的股数
     :param code: 股票代码, 如 000001 或 000001.SZ
-    :param pre_price: 未除权的价格
     :param amount: 未除权的股数
     :param start: 起始日期(YYYYMMDD)
     :param end: 结束日期(YYYYMMDD), None表示到今天
-    :return: (end日除权除息后的价格, end日除权除息后的股数)
+    :return: end日调整后的股数(一般为放大股数)
     NOTE: 
-    xr_price = (pre_price - cash_dividend_per_stock) / (1 + div_per_stock)
     xr_amount = amount * (1 + div_per_stock)
     div_per_stock: 每股转送股数
-    cash_dividend_per_stock: 每股派息税前金额
-    如有多次除权除息，按实施时间顺序从前到后依次计算(前复权)
-    XD:除息 XR:转送股除权 DR:除息及除权, 未考虑配股除权
+    如有多次除权，按实施时间顺序从前到后依次计算(前复权)
+    NOTE:
+    参数错误直接返回原股数,不再抛出异常
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -229,36 +269,79 @@ def get_XD_XR_DR_qfq_price_and_amount(code, pre_price, amount, start:str, end:st
     date_regex = r'^(19[89]\d|20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$'  # from 19800101
     pattern = re.compile(date_regex)
     if not pattern.match(start) or not pattern.match(end):
-        raise ValueError("start 和 end 必须是 YYYYMMDD 格式")
+        return amount
     if start > end:
-        raise ValueError("start 不得晚于 end")
+        return amount
     dividend_csv = f'{FINANDATA_DIR}/dividend/{code}.csv'
     if not os.path.exists(dividend_csv):
-        return pre_price, amount
+        return amount
     dividend_df = pd.read_csv(dividend_csv, dtype={'ex_date': str})
     if dividend_df.empty:
-        return pre_price, amount
-    columns = ['ts_code', 'name', 'industry', 'stk_div', 'cash_div_tax', 'ex_date']
+        return amount
+    columns = ['ts_code', 'name', 'industry', 'stk_div', 'ex_date']
     dividend_df = dividend_df[columns]
     dividend_df = dividend_df.dropna(subset=['ex_date'])
     dividend_df = dividend_df.sort_values(by='ex_date', ascending=True)  # 升序排列
     dividend_df.reset_index(drop=True, inplace=True)  # 重置索引
-    # 遍历dividend_df，如果ex_date在start和end之间，
-    # 计算除权除息后的价格(from start to end)
-    xr_price = pre_price
     xr_amount = amount
     for _, row in dividend_df.iterrows():
         ex_date = row['ex_date']
         if not (start < ex_date <= end):
             continue
         div_per_stock = row['stk_div'] if pd.notna(row['stk_div']) else 0
-        cash_dividend_per_stock = row['cash_div_tax'] if pd.notna(row['cash_div_tax']) else 0
-        xr_price = (xr_price - cash_dividend_per_stock) / (1 + div_per_stock)
         xr_amount = xr_amount * (1 + div_per_stock)
-    xr_price = round(xr_price, 2)  # 保留两位小数
-    if xr_price < 0:
-        xr_price = 0.0  # 如果计算结果小于0，则返回0
-    return xr_price, xr_amount
+    xr_amount = round(xr_amount, 0)  # 保留整数股数
+    return xr_amount
+
+def get_qfq_price_by_adj_factor(code, pre_price, start: str, end: str = None) -> float:
+    """
+    获取前复权价格
+    :param code: 股票代码, 如 000001 或 000001.SZ
+    :param pre_price: 未复权的价格
+    :param start: 起始日期(YYYYMMDD)
+    :param end: 结束日期(YYYYMMDD), None表示到今天
+    :return: 复权后的价格
+    NOTE:
+    参数错误直接返回原价格和股数,不再抛出异常
+    """
+    if len(code) == 6:
+        code = code + '.SH' if code.startswith('6') else code + '.SZ'
+    if end is None:
+        end = datetime.datetime.now().strftime('%Y%m%d')
+    date_regex = r'^(19[89]\d|20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$'  # from 19800101 to 20991231
+    pattern = re.compile(date_regex)
+    if not pattern.match(start) or not pattern.match(end):
+        return pre_price
+    if start > end:
+        return pre_price
+    factor_csv = f'{BASICDATA_DIR}/adjfactor/{code}.csv'
+    if not os.path.exists(factor_csv):
+        return pre_price
+    factor_df = pd.read_csv(factor_csv, dtype={'trade_date': str})
+    if factor_df.empty:
+        return pre_price
+    factor_df = factor_df.sort_values(by='trade_date', ascending=True)  # 升序排列
+    factor_df.reset_index(drop=True, inplace=True)  # 重置索引
+    start_factor = factor_df[factor_df['trade_date'] == start]['adj_factor'].values
+    end_factor = factor_df[factor_df['trade_date'] == end]['adj_factor'].values
+    if start_factor.size == 0 :
+        # 获取最接近 start 的前复权因子
+        start_factor = factor_df[factor_df['trade_date'] < start]['adj_factor'].max()
+    else:
+        start_factor = start_factor[0]
+    if end_factor.size == 0:
+        # 获取最接近 end 的前复权因子
+        end_factor = factor_df[factor_df['trade_date'] <= end]['adj_factor'].max()
+    else:
+        end_factor = end_factor[0]
+    if start_factor == 0 or end_factor == 0:
+        return pre_price
+    # 计算复权后的价格和股数
+    qfq_price = pre_price * (start_factor / end_factor)
+    qfq_price = round(qfq_price, 2)  # 保留两位小数
+    if qfq_price < 0:
+        qfq_price = 0.0  # 如果计算结果小于0，则返回0
+    return qfq_price
 
 def get_up_down_limit(code: str) -> tuple[float, float]:
     """

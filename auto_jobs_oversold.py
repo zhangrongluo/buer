@@ -10,7 +10,7 @@ from tensorflow import keras
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list
-from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_XD_XR_DR_dividend_data
+from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
 from trade_oversold import trade_process, refresh_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
@@ -437,57 +437,31 @@ def build_buy_in_list():
                         'max_down_rate', 'forward_days', 'waiting_days', 'pred', 'real', 'pred_100%', 'src']
         all_df.columns = new_columns
         all_df.to_csv(f'{trade_dir}/buy_in_list.csv', index=False)
-        print(f'All buy_in_list.csv saved to {trade_dir}/buy_in_list.csv')
+    print(f'All buy_in_list.csv saved to {trade_dir}/buy_in_list.csv')
 
 scheduler = BackgroundScheduler()
 scheduler.configure(timezone='Asia/Shanghai')
 
-# 每天0点10分更新交易日历和股票列表
-@scheduler.scheduled_job(
-    trigger='cron', 
-    hour=0, minute=10, misfire_grace_time=300, 
-    id='update_trade_cal_and_stock_list'
-)
 def update_trade_cal_and_stock_list():
     get_trade_cal()
     get_stock_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 交易日历和股票列表更新完成！')
-    download_all_XD_XR_DR_dividend_data()
-    print(f'({MODEL_NAME}) {today} 分红派息数据更新完成！')
 
-# 每天16:30 PM 下载行情和指标基础数据
-@scheduler.scheduled_job(
-    trigger='cron', 
-    hour=16, minute=30, 
-    misfire_grace_time=300, 
-    id='update_daily_data_and_indicator'
-)
 @is_trade_day
-def auto_task0():
+def update_daily_data_and_indicator():
     update_all_daily_data(step=5)
     update_all_daily_indicator(step=5)
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 行情和指标数据更新完成！')
 
-# 每天18:00 PM 更新数据集
-@scheduler.scheduled_job(
-    trigger='cron', 
-    hour=18, minute=0, misfire_grace_time=300, 
-    id='update_and_predict_dataset'
-)
 @is_trade_day
-def auto_task1():
+def update_and_predict_dataset():
     update_dataset()
     predict_dataset()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} oversold 数据集更新完成！')
 
-# 每天01:00 AM 构建和刷新买入清单
-@scheduler.scheduled_job(
-    trigger='cron', 
-    hour=1, minute=0, misfire_grace_time=300, 
-    id='build_buy_in_list')
 @is_trade_day
 def auto_task2():
     build_buy_in_list()
@@ -496,35 +470,28 @@ def auto_task2():
     refresh_buy_in_list()
     print(f'({MODEL_NAME}) {today} 买入清单刷新完成！')
 
-# 每天9:15 AM 下载涨跌停表
-@scheduler.scheduled_job(
-    trigger='cron', 
-    hour=9, minute=15, misfire_grace_time=300, 
-    id='get_up_down_limit_list'
-)
 @is_trade_day
 def get_up_down_limit_list_task():
     get_up_down_limit_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 涨跌停表更新完成！')
 
-# 每天15:30 PM 清屏
-@scheduler.scheduled_job(
-    trigger='cron',
-    hour=15, minute=30, misfire_grace_time=300,
-    id='clear_screen_task'
-)
+@is_trade_day
+def update_adj_factor_data_task():
+    update_all_adj_factor_data()
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
+    download_all_dividend_data()
+    print(f'({MODEL_NAME}) {today} 分红送股数据更新完成！')
+    refresh_buy_in_list()
+    print(f'({MODEL_NAME}) {today} 买入清单刷新完成！')
+
 @is_trade_day
 def clear_sereen_task4():
     os.system('cls' if os.name == 'nt' else 'clear')
     print(f'({MODEL_NAME}) oversold 模型自动运行中')
 
-# 每周六上午1:00训练模型
-@scheduler.scheduled_job(
-    trigger='cron', 
-    day_of_week='sat', hour=1, minute=0, misfire_grace_time=300, 
-    id='train_and_predict_dataset')
-def auto_task3():
+def train_and_predict_dataset():
     train_dataset()
     predict_dataset()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
@@ -588,7 +555,57 @@ def auto_run():
     """
     自动运行函数
     """
-    # load the dynamic task at 9:25 AM
+    # 定时任务注册
+    scheduler.add_job(
+        update_trade_cal_and_stock_list,
+        trigger='cron',
+        hour=0, minute=10, misfire_grace_time=300,
+        id='update_trade_cal_and_stock_list'
+    )
+    scheduler.add_job(
+        auto_task2,
+        trigger='cron',
+        hour=1, minute=0, misfire_grace_time=300,
+        id='build_buy_in_list'
+    )
+    scheduler.add_job(
+        get_up_down_limit_list_task,
+        trigger='cron',
+        hour=9, minute=15, misfire_grace_time=300,
+        id='get_up_down_limit_list'
+    )
+    scheduler.add_job(
+        update_adj_factor_data_task,
+        trigger='cron',
+        hour=12, minute=0, misfire_grace_time=300,
+        id='update_adj_factor_data'
+    )
+    scheduler.add_job(
+        clear_sereen_task4,
+        trigger='cron',
+        hour=15, minute=30, misfire_grace_time=300,
+        id='clear_screen_task'
+    )
+    scheduler.add_job(
+        update_daily_data_and_indicator,
+        trigger='cron',
+        hour=16, minute=30, misfire_grace_time=300,
+        id='update_daily_data_and_indicator'
+    )
+    scheduler.add_job(
+        update_and_predict_dataset,
+        trigger='cron',
+        hour=18, minute=0, misfire_grace_time=300,
+        id='update_and_predict_dataset'
+    )
+    scheduler.add_job(
+        train_and_predict_dataset,
+        trigger='cron',
+        day_of_week='sat', hour=1, minute=0, misfire_grace_time=300,
+        id='train_and_predict_dataset'
+    )
+
+    # 动态任务
     scheduler.add_job(
         trading_task_am,
         args=[scheduler],
@@ -597,7 +614,6 @@ def auto_run():
         id=f'{MODEL_NAME}_start_trading_job_am',
         name='Start_trading_program_at_9:25_AM',
     )
-    # load the dynamic task at 12:55 PM
     scheduler.add_job(
         trading_task_pm,
         args=[scheduler],

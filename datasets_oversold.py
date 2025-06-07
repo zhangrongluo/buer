@@ -6,7 +6,7 @@ import pandas as pd
 import datetime
 from stocklist import get_name_and_industry_by_code
 from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR
-from utils import get_XD_XR_DR_qfq_price_DF
+from utils import get_qfq_price_DF_by_adj_factor
 
 def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
     """
@@ -96,7 +96,7 @@ def create_stock_max_down_dataset(params: tuple):
         trade_date_index = df_daily[df_daily['trade_date'] == last_date].index[0]  # 从此开始计算
         df_daily = df_daily.loc[trade_date_index-FORWARD_DAYS:]
         df_daily = df_daily.reset_index(drop=True)
-        df_daily = get_XD_XR_DR_qfq_price_DF(df_daily)  # 前复权价格序列
+        df_daily = get_qfq_price_DF_by_adj_factor(df_daily)  # 前复权价格序列
 
     trade_csv = f'{BASICDATA_DIR}/dailyindicator/{code}.csv'
     df_trade = pd.read_csv(trade_csv, dtype={'trade_date': str})
@@ -235,7 +235,7 @@ def refresh_oversold_data_csv(params: tuple):
     df_daily['trade_date'] = df_daily['trade_date'].apply(lambda x: '' if x == 'nan' else x)  # 去掉nan
     df_daily = df_daily.sort_values(by='trade_date', ascending=True)
     df_daily = df_daily.reset_index(drop=True)
-    df_daily = get_XD_XR_DR_qfq_price_DF(df_daily)  # 前复权价格序列
+    df_daily = get_qfq_price_DF_by_adj_factor(df_daily)  # 前复权价格序列
 
     # 检查标签空白行是否已经经过了backword个交易日
     df_oversold = df_oversold.sort_values(by='trade_date', ascending=True)

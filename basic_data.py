@@ -2,7 +2,6 @@
 download and update daily data and daily indicator data for all stocks
 """
 import os
-import re
 import datetime
 import pandas as pd
 import tqdm
@@ -119,22 +118,6 @@ def update_daily_indicator(ts_code: str):
     df = df.drop_duplicates(subset='trade_date', keep='first')
     df.to_csv(dest_csv, index=False)
 
-def download_dividend_data(ts_code: str):
-    """
-    download dividend data from tushare
-    :param ts_code: stock code, 600036 or 600036.SH
-    :return: None
-    """
-    if len(ts_code) == 6:
-        ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
-    dividend_df = pro.dividend(ts_code=ts_code)
-    msg = get_name_and_industry_by_code(ts_code)
-    dividend_df.insert(1, 'name', msg[0])
-    dividend_df.insert(2, 'industry', msg[1])
-    dest_dir = f'{FINANDATA_DIR}/dividend'
-    os.makedirs(dest_dir, exist_ok=True)
-    dividend_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
-
 def update_all_daily_data(step: int = 5):
     """
     update daily data for all stocks
@@ -169,7 +152,23 @@ def update_all_daily_indicator(step: int = 5):
         bar.update(step)
     bar.close()
 
-def downlaod_all_dividend_data(step: int = 5):
+def download_dividend_data(ts_code: str):
+    """
+    download dividend data from tushare
+    :param ts_code: stock code, 600036 or 600036.SH
+    :return: None
+    """
+    if len(ts_code) == 6:
+        ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
+    dividend_df = pro.dividend(ts_code=ts_code)
+    msg = get_name_and_industry_by_code(ts_code)
+    dividend_df.insert(1, 'name', msg[0])
+    dividend_df.insert(2, 'industry', msg[1])
+    dest_dir = f'{FINANDATA_DIR}/dividend'
+    os.makedirs(dest_dir, exist_ok=True)
+    dividend_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+
+def download_all_dividend_data(step: int = 5):
     """
     download dividend data for all stocks
     :param step: number of stocks to update one time
@@ -183,22 +182,72 @@ def downlaod_all_dividend_data(step: int = 5):
         with ThreadPoolExecutor() as executor:
             executor.map(download_dividend_data, all_codes[i:i + step])
         bar.update(step)
+    bar.close()
 
-def download_all_XD_XR_DR_dividend_data(step: int = 5):
+def download_adj_factor_data(ts_code: str):
     """
-    download dividend data for XD or XR or DR stocks
-    :param step: number of stocks to update one time
+    download adj factor data from tushare
+    :param ts_code: stock code, 600036 or 600036.SH
     :return: None
     """
-    dest_dir = f'{FINANDATA_DIR}/dividend'
+    if len(ts_code) == 6:
+        ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
+    adj_factor_df = pro.adj_factor(ts_code=ts_code)
+    msg = get_name_and_industry_by_code(ts_code)
+    adj_factor_df.insert(1, 'name', msg[0])
+    adj_factor_df.insert(2, 'industry', msg[1])
+    dest_dir = f'{BASICDATA_DIR}/adjfactor'
     os.makedirs(dest_dir, exist_ok=True)
-    pattern = re.compile(r'^(XD|XR|DR)')
-    all_codes = [item[0] for item in all_stocks_info if pattern.match(item[1])]
-    bar = tqdm.tqdm(total=len(all_codes), desc='下载分红派息数据', unit='stock', ncols=100)
+    adj_factor_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+
+def update_adj_factor_data(ts_code: str):
+    """
+    update or download(if not) adj factor data from last trade date to today
+    :param ts_code: stock code, 600036 or 600036.SH
+    :return: None
+    """
+    if len(ts_code) == 6:
+        ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
+    dest_dir = f'{BASICDATA_DIR}/adjfactor'
+    os.makedirs(dest_dir, exist_ok=True)
+    dest_csv = f'{dest_dir}/{ts_code}.csv'
+    if not os.path.exists(dest_csv):
+        download_adj_factor_data(ts_code)
+        return
+    # update stock adj factor data
+    df = pd.read_csv(dest_csv, dtype={'trade_date': str})
+    df = df.sort_values(by='trade_date', ascending=False)
+    df.reset_index(drop=True, inplace=True)  # 重置索引
+    last_trade_date = df.iloc[0]['trade_date']
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    if today == last_trade_date:
+        return
+    df_new = pro.adj_factor(ts_code=ts_code, start_date=last_trade_date, end_date=today)
+    if df_new.empty or df_new.isna().all().all():
+        return
+    msg = get_name_and_industry_by_code(ts_code)
+    df_new.insert(1, 'name', msg[0])
+    df_new.insert(2, 'industry', msg[1])
+    df = pd.concat([df, df_new], ignore_index=True)
+    df = df.sort_values(by='trade_date', ascending=False)
+    df = df.drop_duplicates(subset='trade_date', keep='first')
+    df.to_csv(dest_csv, index=False)
+
+def update_all_adj_factor_data(step: int = 5):
+    """
+    update or download(if not) adj factor data for all stocks
+    :param step: number of stocks to update at a time
+    :return: None
+    """
+    dest_dir = f'{BASICDATA_DIR}/adjfactor'
+    os.makedirs(dest_dir, exist_ok=True)
+    all_codes = [item[0] for item in all_stocks_info]
+    bar = tqdm.tqdm(total=len(all_codes), desc='更新复权因子数据', unit='stock', ncols=100)
     for i in range(0, len(all_codes), step):
         with ThreadPoolExecutor() as executor:
-            executor.map(download_dividend_data, all_codes[i:i + step])
+            executor.map(update_adj_factor_data, all_codes[i:i + step])
         bar.update(step)
+    bar.close()
 
 # 遍历trade-record目录下的所有csv文件,获取最新的trade_date==today的数量
 def get_indicator_date_equal_today_nums():
@@ -250,4 +299,4 @@ def get_daily_data_equal_today_nums():
 if __name__ == '__main__':
     update_all_daily_data()
     update_all_daily_indicator()
-    download_all_XD_XR_DR_dividend_data()
+    download_all_dividend_data()

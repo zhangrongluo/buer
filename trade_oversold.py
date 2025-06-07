@@ -14,9 +14,8 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
-                   get_XD_XR_DR_qfq_price_and_amount, get_up_down_limit, early_sell_standard, is_rising_or_not, 
-                   is_decreasing_or_not)
-
+                   get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, 
+                   get_up_down_limit, early_sell_standard, is_rising_or_not, is_decreasing_or_not)
 
 backup_dir = f'{BACKUP_DIR}/oversold'
 os.makedirs(backup_dir, exist_ok=True)
@@ -457,11 +456,14 @@ def refresh_holding_list():
         price_in = row['price_in']
         amount = row['amount']  # 股数量
         date_in = row['date_in']
-        xr_price_in, xr_amount = get_XD_XR_DR_qfq_price_and_amount(
-            code=ts_code, pre_price=price_in, amount=amount, start=date_in
-        )  # 获取除权除息后的价格和股数
-        price_in = xr_price_in if xr_price_in > 0 else price_in  # 如果除权除息后价格为0，则使用原价
-        amount = xr_amount if xr_price_in > 0 else amount  # 如果除权除息后价格为0，则使用原股数
+        xr_price_in = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=price_in, start=date_in
+        )  # 获取复权后的价格
+        price_in = xr_price_in if xr_price_in > 0 else price_in  # 如果复权后价格为0，则使用原价
+        xr_amount = get_XR_adjust_amount_by_dividend_data(
+            code=ts_code, amount=amount, start=date_in
+        )
+        amount = xr_amount if xr_price_in > 0 else amount  # 如果复权后价格为0，则使用原股数
         cost_fee = row['cost_fee']
         holding_df.loc[i, 'price_now'] = price_now
         holding_df.loc[i, 'price_in'] = price_in
@@ -555,7 +557,7 @@ def scan_holding_list():
 
 def refresh_buy_in_list():
     """
-    对 buy_in_list.csv 中 buy_point_base 进行除权除息刷新
+    对 buy_in_list.csv 中 buy_point_base 前复权
     """
     if not os.path.exists(BUY_IN_LIST):
         return
@@ -570,8 +572,8 @@ def refresh_buy_in_list():
         ts_code = row['ts_code']
         trade_date = row['trade_date']
         buy_point_base = row['buy_point_base']
-        xr_price, xr_amount = get_XD_XR_DR_qfq_price_and_amount(
-            code=ts_code, pre_price=buy_point_base, amount=0, start=trade_date
+        xr_price = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=buy_point_base, start=trade_date
         )
         if xr_price > 0:
             buy_in_df.loc[i, 'buy_point_base'] = xr_price
