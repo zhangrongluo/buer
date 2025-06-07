@@ -7,7 +7,8 @@ import requests
 import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
-from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR
+from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR, BACKUP_DIR
+from cons_downgap import MAX_TRADE_DAYS
 from cons_oversold import PAUSE
 from cons_hidden import xq_a_token
 
@@ -285,8 +286,8 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
     dividend_df.reset_index(drop=True, inplace=True)  # 重置索引
     xr_amount = amount
     for _, row in dividend_df.iterrows():
-        ex_date = row['ex_date']
-        if not (start < ex_date <= end):
+        ex_date = row['ex_date']  # 除权除息日期
+        if not (start <= ex_date <= end):
             continue
         div_per_stock = row['stk_div'] if pd.notna(row['stk_div']) else 0
         xr_amount = xr_amount * (1 + div_per_stock)
@@ -456,3 +457,139 @@ def is_within_trading_hours():
     time3 = datetime.time(13, 0)  # 下午 13:00
     time4 = datetime.time(15, 0)    # 下午 15:00
     return (time1 <= now <= time2) or (time3 <= now <= time4)
+
+### statistics functions
+def calculate_win_rate(name : Literal['oversold', 'downgap'], start=None, end=None, days=1):
+    """
+    Calculate the win rate based on number of days
+    :param name: Name of the strategy or model, oversold or downgap
+    :param start: 'YYYYMMDD' format, default is None (all data)
+    :param end: 'YYYYMMDD' format, default is None (all data)
+    :param days: Number of days to calculate profit, default is 1
+    :return: Win rate (percentage)
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError("Name not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        backup_root = f'{BACKUP_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        backup_root = f'{BACKUP_DIR}/downgap/max_trade_days_{MAX_TRADE_DAYS}'
+    profit_csv = f'{backup_root}/daily_profit.csv'
+    if not os.path.exists(profit_csv):
+        return 0.0
+    profit_df = pd.read_csv(profit_csv, dtype={'trade_date': str})
+    if start is not None:
+        profit_df = profit_df[profit_df['trade_date'] >= start]
+    if end is not None:
+        profit_df = profit_df[profit_df['trade_date'] <= end]
+    if profit_df.empty:
+        return 0.0
+    profit_df = profit_df.sort_values(by='trade_date', ascending=True)
+    profit_df = profit_df.reset_index(drop=True)
+    win_count = 0
+    for i in range(0, len(profit_df), days):
+        group_df = profit_df.iloc[i:i + days]
+        if group_df.empty:
+            continue
+        total_profit = group_df['delta'].sum()
+        if total_profit > 0:
+            win_count += 1
+    total_groups = len(profit_df) // days + (1 if len(profit_df) % days > 0 else 0)
+    if total_groups == 0:
+        return 0.0
+    win_rate = (win_count / total_groups) * 100
+    return win_rate
+
+def calculate_omega_ratio(name: Literal['oversold', 'downgap'], start=None, end=None):
+    """
+    Calculate omega ratio (total profit to total loss)
+    :param name: Name of the strategy or model, oversold or downgap
+    :param start: 'YYYYMMDD' format, default is None (all data)
+    :param end: 'YYYYMMDD' format, default is None (all data)
+    :return: Ratio of total profit to total loss
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError("Name not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        backup_root = f'{BACKUP_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        backup_root = f'{BACKUP_DIR}/downgap/max_trade_days_{MAX_TRADE_DAYS}'
+    profit_csv = f'{backup_root}/daily_profit.csv'
+    if not os.path.exists(profit_csv):
+        return 0.0
+    profit_df = pd.read_csv(profit_csv, dtype={'trade_date': str})
+    if start is not None:
+        profit_df = profit_df[profit_df['trade_date'] >= start]
+    if end is not None:
+        profit_df = profit_df[profit_df['trade_date'] <= end]
+    if profit_df.empty:
+        return 0.0
+    total_profit = profit_df[profit_df['delta'] > 0]['delta'].sum()
+    total_loss = -profit_df[profit_df['delta'] < 0]['delta'].sum()
+    if total_loss == 0:
+        return 0.0
+    return total_profit / total_loss if total_loss != 0 else 0.0
+
+def get_stock_list_of_specific_date(name: Literal['oversold', 'downgap'], date: str) -> pd.DataFrame:
+    """
+    Get stock list of specific date
+    :param name: Name of the strategy or model, oversold or downgap
+    :param date: 'YYYYMMDD' format
+    :return: List of stock codes for the specific date
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError("Name not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        backup_root = f'{BACKUP_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        backup_root = f'{BACKUP_DIR}/downgap/max_trade_days_{MAX_TRADE_DAYS}'
+    hd_csv = f'{backup_root}/holding_list.csv'
+    hd_df = pd.read_csv(hd_csv, dtype={'date_in': str, 'date_out': str})
+    hd_df['date_in'] = hd_df['date_in'].apply(lambda x: x[:8] if isinstance(x, str) else x)
+    hd_df['date_out'] = hd_df['date_out'].apply(lambda x: x[:8] if isinstance(x, str) else x)
+    hd_df = hd_df[hd_df['date_in'] <= date]
+    hd_df = hd_df[(hd_df['date_out'] > date) | (hd_df['date_out'].isnull())]
+    columns = ['ts_code', 'stock_name', 'industry', 'date_in', 'date_out', 'amount']
+    hd_df = hd_df[columns]
+    hd_df['price'] = None
+    codes = hd_df['ts_code'].unique().tolist()
+    for code in codes:
+        daily_csv = f'basicdata/dailydata/{code}.csv'
+        daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
+        daily_df = daily_df[daily_df['trade_date'] <= date]
+        if not daily_df.empty:
+            daily_df = daily_df.sort_values(by='trade_date', ascending=True)
+            hd_df.loc[hd_df['ts_code'] == code, 'price'] = daily_df.iloc[-1]['close']
+    hd_df['value'] = hd_df['amount'] * hd_df['price']
+    return hd_df
+
+def calculate_return_ratio_of_specific_date(name: Literal['oversold', 'downgap'], date: str) -> float:
+    """
+    Calculate the return ratio of specific date
+    :param name: Name of the strategy or model, oversold or downgap
+    :param date: 'YYYYMMDD' format
+    :return: Return ratio of the specific date
+    NOTE:
+    Return ratio = (total profit) / (total value of the stocks)
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError("Name not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        backup_root = f'{BACKUP_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        backup_root = f'{BACKUP_DIR}/downgap/max_trade_days_{MAX_TRADE_DAYS}'
+    profit_csv = f'{backup_root}/daily_profit.csv'
+    if not os.path.exists(profit_csv):
+        return 0.0
+    profit_df = pd.read_csv(profit_csv, dtype={'trade_date': str})
+    profit_df = profit_df[profit_df['trade_date'] == date]
+    if profit_df.empty:
+        return 0.0
+    profit = profit_df['delta'].sum()
+    hd_df = get_stock_list_of_specific_date(name, date)
+    if hd_df.empty:
+        return 0.0
+    total_value = hd_df['value'].sum()
+    if total_value == 0:
+        return 0.0
+    return round(profit / total_value, 4)

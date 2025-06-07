@@ -458,16 +458,22 @@ def refresh_holding_list():
         date_in = row['date_in']
         xr_price_in = get_qfq_price_by_adj_factor(
             code=ts_code, pre_price=price_in, start=date_in
-        )  # 获取复权后的价格
-        price_in = xr_price_in if xr_price_in > 0 else price_in  # 如果复权后价格为0，则使用原价
+        )  # 获取复权后的买入价格
+        price_in = xr_price_in if xr_price_in > 0 else price_in  # 如果复权后买入价格为0，则使用原价
         xr_amount = get_XR_adjust_amount_by_dividend_data(
             code=ts_code, amount=amount, start=date_in
         )
-        amount = xr_amount if xr_price_in > 0 else amount  # 如果复权后价格为0，则使用原股数
+        amount = xr_amount if xr_price_in > 0 else amount  # 如果复权后买入价格为0，则使用原股数
+        buy_point_base = row['buy_point_base']
+        xr_buy_point_base = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=buy_point_base, start=trade_date
+        )  # 获取复权后的买入基准价格
+        buy_point_base = xr_buy_point_base if xr_buy_point_base > 0 else buy_point_base
         cost_fee = row['cost_fee']
         holding_df.loc[i, 'price_now'] = price_now
         holding_df.loc[i, 'price_in'] = price_in
         holding_df.loc[i, 'amount'] = amount
+        holding_df.loc[i, 'buy_point_base'] = buy_point_base
         profit = (price_now*(1-cost_fee) - price_in*(1+cost_fee)) * amount
         profit = round(profit, 4)
         holding_df.loc[i, 'profit'] = profit
