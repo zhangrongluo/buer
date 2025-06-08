@@ -604,3 +604,44 @@ def calculate_return_ratio_of_specific_date(name: Literal['oversold', 'downgap']
     if total_value == 0:
         return 0.0
     return round(profit / total_value, 4)
+
+def calculate_today_series_statistic_indicator(name: Literal['oversold', 'downgap']):
+    """
+    Calculate today's series statistic indicators
+    :param name: Name of the strategy or model, oversold or downgap
+    NOTE:
+    - 'win_rate': Win rate of the strategy(1、5、10、20、30 days)
+    - 'omega_ratio': Omega ratio of the strategy
+    - 'return_ratio': Return ratio of the strategy
+    """
+    if not is_trade_date_or_not():
+        return
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        indicator_csv = f'{BACKUP_DIR}/oversold/statistic_indicator.csv'
+    if name.upper() == 'DOWNGAP':
+        indicator_csv = f'{BACKUP_DIR}/downgap/max_trade_days_{MAX_TRADE_DAYS}/statistic_indicator.csv'
+    win_rate_1 = calculate_win_rate(name, days=1)
+    win_rate_5 = calculate_win_rate(name, days=5)
+    win_rate_10 = calculate_win_rate(name, days=10)
+    win_rate_20 = calculate_win_rate(name, days=20)
+    win_rate_30 = calculate_win_rate(name, days=30)
+    omega_ratio = calculate_omega_ratio(name)
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    return_ratio = calculate_return_ratio_of_specific_date(name, today)
+    data = {
+        'trade_date': today,
+        'win_rate_1': round(win_rate_1, 4),
+        'win_rate_5': round(win_rate_5, 4),
+        'win_rate_10': round(win_rate_10, 4),
+        'win_rate_20': round(win_rate_20, 4),
+        'win_rate_30': round(win_rate_30, 4),
+        'omega_ratio': round(omega_ratio, 4),
+        'return_ratio': round(return_ratio, 4)
+    }
+    df = pd.DataFrame([data])
+    if not os.path.exists(indicator_csv):
+        df.to_csv(indicator_csv, index=False)
+    else:
+        df.to_csv(indicator_csv, mode='a', header=False, index=False)

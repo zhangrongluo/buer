@@ -9,6 +9,7 @@ import pandas as pd  # type: ignore
 from tensorflow import keras  
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
+from utils import calculate_today_series_statistic_indicator
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
 from trade_oversold import trade_process, refresh_buy_in_list
@@ -487,7 +488,13 @@ def update_adj_factor_data_task():
     print(f'({MODEL_NAME}) {today} 买入清单刷新完成！')
 
 @is_trade_day
-def clear_sereen_task4():
+def calculate_today_statistics_indicators():
+    calculate_today_series_statistic_indicator(name='oversold')
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({MODEL_NAME}) {today} 今日统计数据计算完成！')
+
+@is_trade_day
+def clear_screen_task4():
     os.system('cls' if os.name == 'nt' else 'clear')
     print(f'({MODEL_NAME}) oversold 模型自动运行中')
 
@@ -581,7 +588,13 @@ def auto_run():
         id='update_adj_factor_data'
     )
     scheduler.add_job(
-        clear_sereen_task4,
+        calculate_today_statistics_indicators,
+        trigger='cron',
+        hour=15, minute=5, misfire_grace_time=300,
+        id='calculate_today_statistics_indicators'
+    )
+    scheduler.add_job(
+        clear_screen_task4,
         trigger='cron',
         hour=15, minute=30, misfire_grace_time=300,
         id='clear_screen_task'

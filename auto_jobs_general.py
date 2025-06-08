@@ -67,6 +67,12 @@ def update_adj_factor_data():
     print(f'({cons_oversold.MODEL_NAME}) {today} oversold 买入列表刷新完成')
 
 @jobs_oversold.is_trade_day
+def calculate_today_statistics_indicators():
+    jobs_oversold.calculate_today_series_statistic_indicator(name='oversold')
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({cons_oversold.MODEL_NAME}) {today} 今日统计数据计算完成！')
+
+@jobs_oversold.is_trade_day
 def clear_screen_task():
     os.system('cls' if os.name == 'nt' else 'clear')
     print(f'({cons_oversold.MODEL_NAME}) oversold 和 downgap 模型运行中...')
@@ -173,6 +179,12 @@ general_scheduler.add_job(
     trigger='cron',
     hour=12, minute=0, misfire_grace_time=300,
     id='update_adj_factor_data'
+)
+general_scheduler.add_job(
+    calculate_today_statistics_indicators,
+    trigger='cron',
+    hour=15, minute=5, misfire_grace_time=300,
+    id='calculate_today_statistics_indicators'
 )
 general_scheduler.add_job(
     clear_screen_task,
