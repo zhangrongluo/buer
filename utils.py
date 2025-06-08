@@ -469,7 +469,7 @@ def calculate_win_rate(name : Literal['oversold', 'downgap'], start=None, end=No
     :return: Win rate (percentage)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
-        raise ValueError("Name not in ['oversold', 'downgap']")
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
     if name.upper() == 'OVERSOLD':
         backup_root = f'{BACKUP_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
@@ -509,7 +509,7 @@ def calculate_omega_ratio(name: Literal['oversold', 'downgap'], start=None, end=
     :return: Ratio of total profit to total loss
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
-        raise ValueError("Name not in ['oversold', 'downgap']")
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
     if name.upper() == 'OVERSOLD':
         backup_root = f'{BACKUP_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
@@ -538,7 +538,7 @@ def get_stock_list_of_specific_date(name: Literal['oversold', 'downgap'], date: 
     :return: List of stock codes for the specific date
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
-        raise ValueError("Name not in ['oversold', 'downgap']")
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
     if name.upper() == 'OVERSOLD':
         backup_root = f'{BACKUP_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
@@ -563,17 +563,15 @@ def get_stock_list_of_specific_date(name: Literal['oversold', 'downgap'], date: 
     hd_df['value'] = hd_df['amount'] * hd_df['price']
     return hd_df
 
-def calculate_return_ratio_of_specific_date(name: Literal['oversold', 'downgap'], date: str) -> float:
+def calculate_profit_of_specific_date(name: Literal['oversold', 'downgap'], date: str) -> float:
     """
-    Calculate the return ratio of specific date
+    Calculate the profit of specific date
     :param name: Name of the strategy or model, oversold or downgap
     :param date: 'YYYYMMDD' format
-    :return: Return ratio of the specific date
-    NOTE:
-    Return ratio = (total profit) / (total value of the stocks)
+    :return: Profit of the specific date
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
-        raise ValueError("Name not in ['oversold', 'downgap']")
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
     if name.upper() == 'OVERSOLD':
         backup_root = f'{BACKUP_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
@@ -585,7 +583,20 @@ def calculate_return_ratio_of_specific_date(name: Literal['oversold', 'downgap']
     profit_df = profit_df[profit_df['trade_date'] == date]
     if profit_df.empty:
         return 0.0
-    profit = profit_df['delta'].sum()
+    return profit_df['delta'].sum()
+
+def calculate_return_ratio_of_specific_date(name: Literal['oversold', 'downgap'], date: str) -> float:
+    """
+    Calculate the return ratio of specific date
+    :param name: Name of the strategy or model, oversold or downgap
+    :param date: 'YYYYMMDD' format
+    :return: Return ratio of the specific date
+    NOTE:
+    Return ratio = (total profit) / (total value of the stocks)
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
+    profit = calculate_profit_of_specific_date(name, date)
     hd_df = get_stock_list_of_specific_date(name, date)
     if hd_df.empty:
         return 0.0

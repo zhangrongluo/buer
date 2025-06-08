@@ -303,6 +303,8 @@ def merge_all_oversold_dataset(forward_days, backward_days, down_filter):
             print(f"Error reading {csv_path}: {e}")
             continue
     df_all = pd.concat(df_list, ignore_index=True)
+    # 删除 ts_code name industry 为空的行
+    df_all = df_all.dropna(subset=['code', 'name', 'industry'])
     # 对'turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio'为空的行以 0 填充
     columns_to_fill = ['turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio']
     df_all[columns_to_fill] = df_all[columns_to_fill].fillna(0)
