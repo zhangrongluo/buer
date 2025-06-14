@@ -3,6 +3,7 @@ import tqdm
 import time # type: ignore
 import datetime
 import random
+import shutil
 from tensorflow.keras import layers  # type: ignore
 import math
 import pandas as pd  # type: ignore
@@ -12,8 +13,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
-from trade_oversold import trade_process, refresh_buy_in_list
-from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR
+from trade_oversold import trade_process
+from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
                            TEST_DATASET_PERCENT, MODEL_NAME)
 from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_data_csv, merge_all_oversold_dataset
@@ -438,7 +439,6 @@ def build_buy_in_list():
                         'max_down_rate', 'forward_days', 'waiting_days', 'pred', 'real', 'pred_100%', 'src']
         all_df.columns = new_columns
         all_df.to_csv(f'{trade_dir}/buy_in_list.csv', index=False)
-    print(f'All buy_in_list.csv saved to {trade_dir}/buy_in_list.csv')
 
 scheduler = BackgroundScheduler()
 scheduler.configure(timezone='Asia/Shanghai')
@@ -464,12 +464,10 @@ def update_and_predict_dataset():
     print(f'({MODEL_NAME}) {today} oversold 数据集更新完成！')
 
 @is_trade_day
-def auto_task2():
+def build_buy_in_list_task():
     build_buy_in_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 买入清单更新完成！')
-    refresh_buy_in_list()
-    print(f'({MODEL_NAME}) {today} 买入清单刷新完成！')
 
 @is_trade_day
 def get_up_down_limit_list_task():
@@ -478,14 +476,12 @@ def get_up_down_limit_list_task():
     print(f'({MODEL_NAME}) {today} 涨跌停表更新完成！')
 
 @is_trade_day
-def update_adj_factor_data_task():
+def update_adj_factor_and_dividend_data_task():
     update_all_adj_factor_data()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
     download_all_dividend_data()
     print(f'({MODEL_NAME}) {today} 分红送股数据更新完成！')
-    refresh_buy_in_list()
-    print(f'({MODEL_NAME}) {today} 买入清单刷新完成！')
 
 @is_trade_day
 def calculate_today_statistics_indicators():
@@ -494,7 +490,7 @@ def calculate_today_statistics_indicators():
     print(f'({MODEL_NAME}) {today} 今日统计数据计算完成！')
 
 @is_trade_day
-def clear_screen_task4():
+def clear_screen_task():
     os.system('cls' if os.name == 'nt' else 'clear')
     print(f'({MODEL_NAME}) oversold 模型自动运行中')
 
@@ -504,12 +500,30 @@ def train_and_predict_dataset():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} oversold 模型训练完成！')
 
+@is_trade_day
+def backup_trade_data():
+    """
+    把TRADE_DIR/oversold目录下的所有文件备份到BACKUP_DIR/oversold/oversold_<备份时间>目录下
+    NOTE:
+    备份清单包括: 买入清单、持有清单、交易日志、资金流水、每日利润、每日指标文件
+    保留最近的6个备份
+    """
+    trade_dir = f'{TRADE_DIR}/oversold'
+    backup_root = f'{BACKUP_DIR}/oversold'
+    backup_dir = f'{backup_root}/oversold_{datetime.datetime.now().strftime("%Y%m%d %H%M%S")}'
+    shutil.copytree(trade_dir, backup_dir, dirs_exist_ok=True)
+    files = os.listdir(backup_root)
+    dirs = [d for d in files if os.path.isdir(os.path.join(backup_root, d))]
+    dirs.sort(reverse=True)
+    [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[6:]]  # 保留最近6个备份
+    print(f'({MODEL_NAME}) oversold 模型交易数据备份完成！')
+
 # 动态任务am
 @is_trade_day
 def trading_task_am(scheduler):
     now = datetime.datetime.now().time()
     start_time = datetime.time(9, 20)  # 9:20 AM, start of trading
-    end_time = datetime.time(11, 30)  # 3:00 PM, end of trading
+    end_time = datetime.time(11, 30)  # 11:30 AM, end of trading
     if start_time <= now <= end_time:
         try:
             trade_process()
@@ -566,14 +580,14 @@ def auto_run():
     scheduler.add_job(
         update_trade_cal_and_stock_list,
         trigger='cron',
-        hour=0, minute=10, misfire_grace_time=300,
+        hour=0, minute=1, misfire_grace_time=300,
         id='update_trade_cal_and_stock_list'
     )
     scheduler.add_job(
-        auto_task2,
+        build_buy_in_list_task,
         trigger='cron',
         hour=1, minute=0, misfire_grace_time=300,
-        id='build_buy_in_list'
+        id='update_buy_in_list'
     )
     scheduler.add_job(
         get_up_down_limit_list_task,
@@ -582,7 +596,13 @@ def auto_run():
         id='get_up_down_limit_list'
     )
     scheduler.add_job(
-        update_adj_factor_data_task,
+        backup_trade_data,
+        trigger='cron',
+        hour=11, minute=45, misfire_grace_time=300,
+        id='backup_trade_data_am'
+    )
+    scheduler.add_job(
+        update_adj_factor_and_dividend_data_task,
         trigger='cron',
         hour=12, minute=0, misfire_grace_time=300,
         id='update_adj_factor_data'
@@ -594,10 +614,10 @@ def auto_run():
         id='calculate_today_statistics_indicators'
     )
     scheduler.add_job(
-        clear_screen_task4,
+        backup_trade_data,
         trigger='cron',
-        hour=15, minute=30, misfire_grace_time=300,
-        id='clear_screen_task'
+        hour=15, minute=15, misfire_grace_time=300,
+        id='backup_trade_data_pm'
     )
     scheduler.add_job(
         update_daily_data_and_indicator,

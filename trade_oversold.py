@@ -1,7 +1,6 @@
 import os
 import re
 import pandas as pd
-import subprocess
 import datetime
 import logging
 from threading import Lock
@@ -14,7 +13,6 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
-                   get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, 
                    get_up_down_limit, early_sell_standard, is_rising_or_not, is_decreasing_or_not)
 
 backup_dir = f'{BACKUP_DIR}/oversold'
@@ -43,21 +41,6 @@ def _get_holding_stocks_number() -> int:
     return holding_stocks
 HOLDING_STOCKS = _get_holding_stocks_number()
 print(f'({MODEL_NAME}) HOLDING_STOCKS is {HOLDING_STOCKS} now')
-
-def copy_holding_list_to_backup_root():
-    """
-    copy holding list to backup to avoid data loss
-    """
-    dest_holding_list = f'{backup_dir}/holding_list.csv'
-    if not os.path.exists(HOLDING_LIST):
-        return
-    if not os.path.exists(dest_holding_list):
-        subprocess.run(['cp', HOLDING_LIST, backup_dir])
-    else:  # 如果src行数大于等于dest行数，则拷贝
-        src_df = pd.read_csv(HOLDING_LIST)  # lock or unlock?
-        dest_df = pd.read_csv(dest_holding_list)
-        if src_df.shape[0] >= dest_df.shape[0]:
-            subprocess.run(['cp', HOLDING_LIST, backup_dir])
 
 # buy in and sell out
 def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base: float, target_rate: float) -> None:
@@ -198,24 +181,6 @@ def calculate_buy_in_amount(funds, price) -> int | None:
     amount = amount // 100 * 100
     return amount
 
-def calculate_cash_and_stock_total_value() -> tuple:
-    """
-    calculate cash and stock total value
-    :return: cash amount, stock total value, total value
-    """
-    if not os.path.exists(HOLDING_LIST):
-        return
-    with lock:
-        holding_df = pd.read_csv(HOLDING_LIST)
-        cash_row = holding_df[holding_df['ts_code'] == 'cash_ini']
-        cash_amount = round(cash_row['amount'].values[0], 2)
-        holding_df = holding_df[holding_df['ts_code'] != 'cash_ini']
-        holding_df = holding_df[holding_df['status'] == 'holding']
-        holding_df = holding_df.copy()
-        holding_df['total_value'] = holding_df['price_now'] * holding_df['amount']
-        stock_total_value = round(holding_df['total_value'].sum(), 2)
-    return cash_amount, stock_total_value, cash_amount + stock_total_value
-
 def create_daily_profit_list():
     """
     create and update daily profit list
@@ -233,7 +198,6 @@ def create_daily_profit_list():
     if not os.path.exists(DAILY_PROFIT):
         fisrt_row = pd.DataFrame([[today, total_profit, total_profit]], columns=['trade_date', 'profit', 'delta'])
         fisrt_row.to_csv(DAILY_PROFIT, index=False)
-        subprocess.run(['cp', DAILY_PROFIT, backup_dir])
         return
     profit_df = pd.read_csv(DAILY_PROFIT, dtype={'trade_date': str})
     profit_df = profit_df.sort_values(by='trade_date', ascending=True)
@@ -245,7 +209,6 @@ def create_daily_profit_list():
         profit_df.loc[profit_df['trade_date'] == today, 'profit'] = total_profit
         profit_df.loc[profit_df['trade_date'] == today, 'delta'] = total_profit
         profit_df.to_csv(DAILY_PROFIT, index=False)
-        subprocess.run(['cp', DAILY_PROFIT, backup_dir])
         return
     reverse_second_profit = profit_df.iloc[-2]['profit']
     delta = round(total_profit-reverse_second_profit, 2)
@@ -253,8 +216,6 @@ def create_daily_profit_list():
     profit_df.loc[profit_df['trade_date'] == today, 'delta'] = delta
     profit_df = profit_df.sort_values(by='trade_date', ascending=True)
     profit_df.to_csv(DAILY_PROFIT, index=False)
-    # copy daily_profit.csv to backup
-    subprocess.run(['cp', DAILY_PROFIT, backup_dir])
 
 def create_or_update_funds_change_list(funds: float, note: str) -> bool:
     """
@@ -278,8 +239,7 @@ def create_or_update_funds_change_list(funds: float, note: str) -> bool:
         print('可用资金不足, 无法完成交易')
         return False
     new_row = pd.DataFrame([[now, funds, new_balence, note]], columns=['datetime', 'amount', 'balance', 'note'])
-    funds_change_df = pd.concat([funds_change_df, new_row], ignore_index=True)
-    funds_change_df.to_csv(FUNDS_LIST, index=False)
+    new_row.to_csv(FUNDS_LIST, mode='a', header=False, index=False)
     return True
 
 def create_holding_list(initial_cash: float = initial_funds):
@@ -427,62 +387,49 @@ def refresh_holding_list():
         # if status is holding, update holding_days, days, price_now, price_in, amount, profit
         # rate_current, rate_yearly
         # holding_days(自然日历间隔天数)
-        date_in = datetime.datetime.strptime(row['date_in'], '%Y%m%d')  # date format problem
-        today = datetime.datetime.now()
-        holding_days = (today - date_in).days + 1
-        holding_df.loc[i, 'holding_days'] = holding_days
-        # days(交易日历间隔天数today - trade_date)
-        daily_csv = f'{BASICDATA_DIR}/dailydata/{row["ts_code"]}.csv'
-        daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
-        daily_df = daily_df.sort_values(by='trade_date', ascending=True)
-        trade_date_list = daily_df['trade_date'].tolist()
-        today_str = today.strftime('%Y%m%d')
-        trade_date_index = trade_date_list.index(trade_date)
-        if today_str in trade_date_list:
-            today_index = trade_date_list.index(today_str)
-            days = abs(today_index - trade_date_index) 
-        else:
-            today_index = len(trade_date_list) - 1
-            days = abs(today_index - trade_date_index) + 1  # today还未收盘，未在daily_df中，所以+1
-        holding_df.loc[i, 'days'] = days
-        # price_now, price_in, amount, profit, rate_current, rate_yearly
-        price_now = get_stock_realtime_price(row['ts_code'])
-        print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
-        if price_now is None:
-            with lock:
-                holding_df.to_csv(HOLDING_LIST, index=False)
-            return
-        ts_code = row['ts_code']
-        price_in = row['price_in']
-        amount = row['amount']  # 股数量
-        date_in = row['date_in']
-        xr_price_in = get_qfq_price_by_adj_factor(
-            code=ts_code, pre_price=price_in, start=date_in
-        )  # 获取复权后的买入价格
-        price_in = xr_price_in if xr_price_in > 0 else price_in  # 如果复权后买入价格为0，则使用原价
-        xr_amount = get_XR_adjust_amount_by_dividend_data(
-            code=ts_code, amount=amount, start=date_in
-        )
-        amount = xr_amount if xr_price_in > 0 else amount  # 如果复权后买入价格为0，则使用原股数
-        buy_point_base = row['buy_point_base']
-        xr_buy_point_base = get_qfq_price_by_adj_factor(
-            code=ts_code, pre_price=buy_point_base, start=trade_date
-        )  # 获取复权后的买入基准价格
-        buy_point_base = xr_buy_point_base if xr_buy_point_base > 0 else buy_point_base
-        cost_fee = row['cost_fee']
-        holding_df.loc[i, 'price_now'] = price_now
-        holding_df.loc[i, 'price_in'] = price_in
-        holding_df.loc[i, 'amount'] = amount
-        holding_df.loc[i, 'buy_point_base'] = buy_point_base
-        profit = (price_now*(1-cost_fee) - price_in*(1+cost_fee)) * amount
-        profit = round(profit, 4)
-        holding_df.loc[i, 'profit'] = profit
-        rate_current = profit / (price_in * amount)
-        rate_current = round(rate_current, 4)
-        holding_df.loc[i, 'rate_current'] = rate_current
-        rate_yearly = rate_current * 365 / holding_days  # 自然日历年化收益率
-        rate_yearly = round(rate_yearly, 4)
-        holding_df.loc[i, 'rate_yearly'] = rate_yearly
+        try:
+            date_in = datetime.datetime.strptime(row['date_in'], '%Y%m%d')  # date format problem
+            today = datetime.datetime.now()
+            holding_days = (today - date_in).days + 1
+            holding_df.loc[i, 'holding_days'] = holding_days
+            # days(交易日历间隔天数today - trade_date)
+            daily_csv = f'{BASICDATA_DIR}/dailydata/{row["ts_code"]}.csv'
+            try:
+                daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
+                daily_df = daily_df.sort_values(by='trade_date', ascending=True)
+                trade_date_list = daily_df['trade_date'].tolist()
+                today_str = today.strftime('%Y%m%d')
+                trade_date_index = trade_date_list.index(trade_date)
+                if today_str in trade_date_list:
+                    today_index = trade_date_list.index(today_str)
+                else:
+                    today_index = len(trade_date_list) - 1
+                trade_date_index = trade_date_list.index(trade_date)
+                days = abs(today_index - trade_date_index) 
+                holding_df.loc[i, 'days'] = days
+            except Exception as e:
+                print(f"读取daily_csv失败: {daily_csv}, 错误: {e}")
+                return
+            # price_now, price_in, amount, profit, rate_current, rate_yearly
+            price_now = get_stock_realtime_price(row['ts_code'])
+            if price_now is None:
+                return
+            print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
+            price_in = row['price_in']
+            amount = row['amount']  # 股数量
+            cost_fee = row['cost_fee']
+            holding_df.loc[i, 'price_now'] = price_now
+            profit = (price_now*(1-cost_fee) - price_in*(1+cost_fee)) * amount
+            profit = round(profit, 4)
+            holding_df.loc[i, 'profit'] = profit
+            rate_current = profit / (price_in * amount)
+            rate_current = round(rate_current, 4)
+            holding_df.loc[i, 'rate_current'] = rate_current
+            rate_yearly = rate_current * 365 / holding_days  # 自然日历年化收益率
+            rate_yearly = round(rate_yearly, 4)
+            holding_df.loc[i, 'rate_yearly'] = rate_yearly
+        except Exception as e:
+            print(f"refresh_holding_list_row error: {e}")
     
     # 多线程刷新holding_list.csv
     idx_rows = list(holding_df.iterrows())
@@ -538,58 +485,37 @@ def scan_holding_list():
         if days >= MAX_TRADE_DAYS:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
+                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: days {days} >= {MAX_TRADE_DAYS}'
+                trade_log.info(msg)
         # if rate_current <= MAX_DOWN_LIMIT, sell out
         rate_current = row['rate_current']
         if rate_current <= MAX_DOWN_LIMIT:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
+                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: rate_current {rate_current:.2%} <= {MAX_DOWN_LIMIT:.2%}'
+                trade_log.info(msg)
         # if reach the target rate, sell out
         base_point = row['buy_point_base']
         target_rate = row['target_rate']
         if price_now >= base_point * (1 + target_rate):
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
+                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: reach the target_rate: {target_rate:.2%}'
+                trade_log.info(msg)
         # sell out early or not
         rate_yearly = row['rate_yearly']
         early_or_not = early_sell_standard(holding_days, rate_current, rate_yearly)
         if early_or_not:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
+                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: trigger early sell standard, \
+                    holding_days: {holding_days}, rate_current: {rate_current:.2%}, rate_yearly: {rate_yearly:.2%}'
+                trade_log.info(msg)
 
     # 多线程扫描holding_list.csv
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:
         executor.map(scan_holding_list_row, idx_rows)
-
-def refresh_buy_in_list():
-    """
-    对 buy_in_list.csv 中 buy_point_base 前复权
-    """
-    if not os.path.exists(BUY_IN_LIST):
-        return
-    buy_in_df = pd.read_csv(BUY_IN_LIST, dtype={'trade_date': str})
-
-    def refresh_buy_in_list_row(idx_row):
-        """
-        refresh buy_in_list single row infomation
-        :param idx_row: index, row
-        """
-        i, row = idx_row
-        ts_code = row['ts_code']
-        trade_date = row['trade_date']
-        buy_point_base = row['buy_point_base']
-        xr_price = get_qfq_price_by_adj_factor(
-            code=ts_code, pre_price=buy_point_base, start=trade_date
-        )
-        if xr_price > 0:
-            buy_in_df.loc[i, 'buy_point_base'] = xr_price
-
-    # 多线程刷新buy_in_list.csv
-    idx_rows = list(buy_in_df.iterrows())
-    with ThreadPoolExecutor() as executor:
-        executor.map(refresh_buy_in_list_row, idx_rows)
-    with lock:
-        buy_in_df.to_csv(BUY_IN_LIST, index=False)
 
 def trade_process():
     """
@@ -601,4 +527,3 @@ def trade_process():
     refresh_holding_list()
     scan_holding_list()
     create_daily_profit_list()
-    copy_holding_list_to_backup_root()
