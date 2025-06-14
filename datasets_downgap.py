@@ -6,8 +6,8 @@ import pandas as pd
 import datetime
 import tushare as ts
 from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR
-from cons_downgap import MAX_TRADE_DAYS
 from stocklist import get_name_and_industry_by_code
+from utils import get_qfq_price_DF_by_adj_factor
 
 
 daily_root = os.path.join(BASICDATA_DIR, 'dailydata')
@@ -43,11 +43,11 @@ def get_gaps_statistic_data(code: str):
         last_trade_date = last_trade_date.strftime('%Y%m%d')
         df = df[df['trade_date'] > last_trade_date]
     # preprocess data
+    df = get_qfq_price_DF_by_adj_factor(df)  # 获取前复权数据
     df = df.sort_values(by='trade_date', ascending=True)
     df.reset_index(drop=True, inplace=True)  # 重置索引
     df['pre_high'] = df['high'].shift(1)
     df['pre_low'] = df['low'].shift(1)
-
     # if high<pre_low, down, if low>pre_high, up
     df['gap'] = None
     df.loc[df['high'] < df['pre_low'], 'gap'] = 'down'
@@ -56,7 +56,6 @@ def get_gaps_statistic_data(code: str):
     df['gap_percent'] = None      # 计算添加gap_percent列
     df.loc[df['gap'] == 'down', 'gap_percent'] = round((df['high'] - df['pre_low']) / df['pre_low'], 4)
     df.loc[df['gap'] == 'up', 'gap_percent'] = round((df['low'] - df['pre_high']) / df['pre_high'], 4)
-    
     # 使用前14天pct_chg 数据计算RSI = 100-100/(1+RS)
     period = 14
     df['RSI14'] = None
@@ -117,7 +116,6 @@ def get_gaps_statistic_data(code: str):
             continue
         map7 = df.loc[i-period:i, 'close'].sum() / period
         df.loc[i, 'MAP7'] = round(map7, 2)
-
     # 遍历df每一行,获取回补的日期,计算回补期间的涨幅
     # 如果某行的gap为down,记录该行的pre_low值为low0, 然后从该行下一行开始查找
     # high>low0的行， 记录该行trade_date日期为fill_date
@@ -140,8 +138,7 @@ def get_gaps_statistic_data(code: str):
                 # NOTE 按照计算过程来看，rise_percent的结果是理想的状态，实际要打个折扣。
                 df1 = df[(df['trade_date'] >= date0) & (df['trade_date'] <= fill_date)]
                 low1 = df1['low'].min()
-                date0_pre_low = df[df['trade_date'] == date0]['pre_low'].values[0]
-                rise_percent = round((date0_pre_low - low1) / low1, 4)
+                rise_percent = round((low0 - low1) / low1, 4)
                 df.loc[i, 'rise_percent'] = rise_percent
         elif row['gap'] == 'up':
             high0 = row['pre_high']
@@ -160,7 +157,6 @@ def get_gaps_statistic_data(code: str):
                 close1 = df1[df1['trade_date'] == date0]['close'].values[0]
                 rise_percent = round((high1 - close1) / close1, 4)
                 df.loc[i, 'rise_percent'] = rise_percent
-    
     # calculate days between trade_date and fill_date
     df.dropna(subset=['gap'], inplace=True)
     df['days'] = None
@@ -175,7 +171,6 @@ def get_gaps_statistic_data(code: str):
                 df.loc[i, 'days'] = days
         except Exception as e:
             continue
-
     # open trade record and insert turnover_rate mv_ratio ... to df
     trade_file = os.path.join(BASICDATA_DIR, 'dailyindicator', f"{code}.csv")
     if not os.path.exists(trade_file):
@@ -192,7 +187,6 @@ def get_gaps_statistic_data(code: str):
             'gap', 'gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'RSI7', 'RSI3', 'K', 'MAP14','MAP7',
             'turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio', 'trade_date', 'fill_date', 'days', 
             'rise_percent']]
-    
     # concat df to gapt_csv
     gap_csv = os.path.join(gap_root, f'{code}.csv')
     if os.path.exists(gap_csv):
@@ -222,6 +216,7 @@ def refresh_the_gap_csv(code: str):
     gap_df = gap_df.drop_duplicates(subset='trade_date', keep='last')
     gap_df = gap_df.sort_values(by='trade_date', ascending=True)
     daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
+    daily_df = get_qfq_price_DF_by_adj_factor(daily_df)  # 获取前复权数据
     daily_df = daily_df.sort_values(by='trade_date', ascending=True)
     daily_df['pre_low'] = daily_df['low'].shift(1)
     daily_df['pre_high'] = daily_df['high'].shift(1)
@@ -243,8 +238,7 @@ def refresh_the_gap_csv(code: str):
                 # NOTE 按照计算过程来看，rise_percent的结果是理想的状态，实际要打个折扣。
                 df1 = daily_df[(daily_df['trade_date'] >= date0) & (daily_df['trade_date'] <= fill_date)]
                 low1 = df1['low'].min()
-                date0_pre_low = daily_df[daily_df['trade_date'] == date0]['pre_low'].values[0]
-                rise_percent = round((date0_pre_low - low1) / low1, 4)
+                rise_percent = round((low0 - low1) / low1, 4)
                 gap_df.loc[i, 'rise_percent'] = rise_percent
         elif row['gap'] == 'up':
             high0 = row['pre_high']
@@ -278,8 +272,8 @@ def refresh_the_gap_csv(code: str):
     gap_df.to_csv(gap_csv, index=False)
 
 # 把gap_data目录下的所有csv文件合并到一个csv文件
-def merge_all_gap_data():
-    dest_dir = f'{temp_root}/max_trade_days_{MAX_TRADE_DAYS}'
+def merge_all_gap_data(max_trade_days: int):
+    dest_dir = f'{temp_root}/max_trade_days_{max_trade_days}'
     os.makedirs(dest_dir, exist_ok=True)
     all_gaps_csv = os.path.join(f'{dest_dir}', 'all_gap_data.csv')
     if os.path.exists(all_gaps_csv):

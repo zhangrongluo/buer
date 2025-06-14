@@ -22,8 +22,8 @@ from cons_general import TRADE_DIR, BACKUP_DIR
 BUY_IN_LIST = f'{TRADE_DIR}/oversold/buy_in_list.csv'  # 买入清单
 HOLDING_LIST = f'{TRADE_DIR}/oversold/holding_list.csv'  # 持仓清单
 DAILY_PROFIT = f'{TRADE_DIR}/oversold/daily_profit.csv'  # 每日盈亏
-FUNDS_LIST = f'{BACKUP_DIR}/oversold/funds_change_list.csv'  # 资金清单
-TRADE_LOG = f'{BACKUP_DIR}/oversold/trade.log'  # 交易日志
+FUNDS_LIST = f'{TRADE_DIR}/oversold/funds_change_list.csv'  # 资金清单
+TRADE_LOG = f'{TRADE_DIR}/oversold/trade.log'  # 交易日志
 
 # TO_UPDATE == False, SKIP updating dataset
 dataset_to_update = [
@@ -43,7 +43,7 @@ dataset_to_train = [
 
 # PRED_MODELS == 0, SKIP predicting dataset
 dataset_to_predict_trade = [
-    {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.35, 'PRED_MODELS': 8},
+    {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.35, 'PRED_MODELS': 0},
     {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.45, 'PRED_MODELS': 8},
     {'FORWARD_DAYS': 200, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.50, 'PRED_MODELS': 8},
     {'FORWARD_DAYS': 225, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.55, 'PRED_MODELS': 8},
