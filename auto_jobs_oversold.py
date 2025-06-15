@@ -535,7 +535,7 @@ def trading_task_am(scheduler):
                 trading_task_am,
                 args=[scheduler],
                 run_date=datetime.datetime.now()+datetime.timedelta(seconds=1),
-                id=f'{MODEL_NAME}_trading_job_{int(time.time())}',  # dynamic task id to avoid conflict
+                id=f'{MODEL_NAME}_trading_job_am_{int(time.time())}',
                 name='Run_am_trading_task'
             )
         else:
@@ -562,7 +562,7 @@ def trading_task_pm(scheduler):
                 trading_task_pm,
                 args=[scheduler],
                 run_date=datetime.datetime.now()+datetime.timedelta(seconds=1),
-                id=f'{MODEL_NAME}_trading_job_{int(time.time())}',  # dynamic task id to avoid conflict
+                id=f'{MODEL_NAME}_trading_job_pm_{int(time.time())}',
                 name='Run_pm_trading_task'
             )
         else:

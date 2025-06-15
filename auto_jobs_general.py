@@ -38,7 +38,6 @@ def build_and_refresh_buy_in_list():
     build and refresh buy in list
     """
     jobs_oversold.build_buy_in_list()
-    jobs_oversold.refresh_buy_in_list()
     today = datetime.date.today().strftime('%Y%m%d')
     print(f'({cons_oversold.MODEL_NAME}) {today} oversold 买入列表构建刷新完成')
     jobs_downgap.build_buy_in_list()
@@ -63,14 +62,16 @@ def update_adj_factor_data():
     print(f'({cons_oversold.MODEL_NAME}) {today} 复权因子数据更新完成')
     download_all_dividend_data()
     print(f'({cons_oversold.MODEL_NAME}) {today} 分红送股数据更新完成')
-    jobs_oversold.refresh_buy_in_list()
-    print(f'({cons_oversold.MODEL_NAME}) {today} oversold 买入列表刷新完成')
 
 @jobs_oversold.is_trade_day
 def calculate_today_statistics_indicators():
+    """ 
+    calculate today's statistics indicators
+    """
     jobs_oversold.calculate_today_series_statistic_indicator(name='oversold')
+    jobs_downgap.calculate_today_series_statistic_indicator(name='downgap')
     today = datetime.datetime.now().date().strftime('%Y%m%d')
-    print(f'({cons_oversold.MODEL_NAME}) {today} 今日统计数据计算完成！')
+    print(f'({cons_downgap.MODEL_NAME}) {today} 今日统计数据计算完成！')
 
 @jobs_oversold.is_trade_day
 def clear_screen_task():
@@ -234,4 +235,5 @@ def auto_run():
         print(f'({cons_oversold.MODEL_NAME}) 自动运行已关闭')
 
 if __name__ == '__main__':
-    auto_run()
+    # auto_run()
+    pass  # 暂停 auto_jobs_general.py 的自动运行

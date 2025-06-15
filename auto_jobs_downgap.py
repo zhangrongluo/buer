@@ -506,8 +506,7 @@ def trading_task_am(scheduler, max_trade_days: int):
                 trading_task_am,
                 args=[scheduler, max_trade_days],
                 run_date=datetime.datetime.now()+datetime.timedelta(seconds=1),
-                id=f'{MODEL_NAME}_trading_job_{int(time.time())}',  # dynamic task id to avoid conflict
-                name='Run_am_trading_task'
+                id=f'{MODEL_NAME}_trading_job_am_{max_trade_days}',
             )
         else:
             now = datetime.datetime.now()
@@ -538,8 +537,7 @@ def trading_task_pm(scheduler, max_trade_days: int):
                 trading_task_pm,
                 args=[scheduler, max_trade_days],
                 run_date=datetime.datetime.now()+datetime.timedelta(seconds=1),
-                id=f'{MODEL_NAME}_trading_job_{int(time.time())}',  # dynamic task id to avoid conflict
-                name='Run_pm_trading_task'
+                id=f'{MODEL_NAME}_trading_job_pm_{max_trade_days}',
             )
         else:
             now = datetime.datetime.now()
@@ -556,9 +554,9 @@ def auto_run():
     scheduler.add_job(
         update_buy_in_list,
         trigger='cron',
-        hour=1, minute=0, misfire_grace_time=300,
+        hour=0, minute=30, misfire_grace_time=300,
         id='build_buy_in_list',
-        name='每天01:00创建买入清单'
+        name='每天00:30创建买入清单'
     )
     scheduler.add_job(
         trading_task_am,
@@ -572,9 +570,9 @@ def auto_run():
         trading_task_am,
         args=[scheduler, 45],
         trigger='cron',
-        hour=9, minute=25, misfire_grace_time=300,
+        hour=9, minute=26, misfire_grace_time=300,
         id=f'{MODEL_NAME}_start_trading_job_am_45',
-        name='Start_trading_program_at_9:25_AM_45',
+        name='Start_trading_program_at_9:26_AM_45',
     )
     scheduler.add_job(
         trading_task_pm,
@@ -588,9 +586,9 @@ def auto_run():
         trading_task_pm,
         args=[scheduler, 45],
         trigger='cron',
-        hour=12, minute=55, misfire_grace_time=300,
+        hour=12, minute=56, misfire_grace_time=300,
         id=f'{MODEL_NAME}_start_trading_job_pm_45',
-        name='Start_trading_program_at_12:55_PM_45',
+        name='Start_trading_program_at_12:56_PM_45',
     )
     scheduler.add_job(
         calculate_today_statistics_indicators,
@@ -609,9 +607,9 @@ def auto_run():
     scheduler.add_job(
         update_and_predict_dataset,
         trigger='cron',
-        hour=17, minute=30, misfire_grace_time=300,
+        hour=17, minute=45, misfire_grace_time=300,
         id='update_predict_dataset',
-        name='每日17:30更新预测数据集'
+        name='每日17:45更新预测数据集'
     )
     scheduler.add_job(
         train_and_predict_model,
