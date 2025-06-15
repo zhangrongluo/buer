@@ -8,7 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 from cons_general import DATASETS_DIR, BASICDATA_DIR
 from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
-from utils import send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not
+from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not,
+                   get_up_down_limit, is_decreasing_or_not, is_rising_or_not)
 from stocklist import get_name_and_industry_by_code
 
 daily_root = f'{BASICDATA_DIR}/dailydata'
@@ -79,7 +80,7 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: 
     msg = get_name_and_industry_by_code(code)
     stock_name = msg[0]
     industry = msg[1]
-    pattern = re.compile(r'[*]*[sS][tT]|退市|退|[pP][Tt]|[xX][rR]')  # 例外股票，不投
+    pattern = re.compile(r'[*]?[sS][tT]|退市|退|[pP][Tt]')  # 例外股票，不投
     if pattern.findall(stock_name):
         return
     trade_date = trade_date
@@ -417,6 +418,13 @@ def scan_buy_in_list(max_trade_days:int):
             return
         if price_now <= MIN_STOCK_PRICE:
             return
+        # 下跌不买
+        if is_decreasing_or_not(code, price_now):
+            return
+        # 跌停不买
+        down_limit = get_up_down_limit(code=code)[1]
+        if down_limit is not None and price_now / down_limit <= 1.02: 
+            return
         # 如果同一只股票存在多个缺口未买入时,重新计算确定每个缺口的买点p
         stock_df = buy_in_df[buy_in_df['ts_code'] == code]
         stock_nums = stock_df.shape[0]
@@ -435,11 +443,11 @@ def scan_buy_in_list(max_trade_days:int):
             pred_rate = (target_price - price_now) / price_now
             if pred_rate < pred * PRED_RATE_PCT:
                 return
+            # 当日接近跌停且推断还会继续大跌或者跌停,合理预期会出现第二个较大的缺口,该缺口的买点
+            # 会比当前缺口的买点更低,故不能以当前缺口的买点成交。此时采用强制提高收益率的方式
+            # （即人为设定更低的买点）阻止交易,等待第二个较大的缺口出现。
             if pct_chg <= -0.096 and (pred - abs(pct_chg) >= 0.095 or pred >= 0.20):
-                # 当日跌停且推断还会继续大跌或者跌停,合理预期会出现第二个较大的缺口,该缺口的买点
-                # 会比当前缺口的买点更低,故不能以当前缺口的买点成交。此时采用强制提高收益率的方式
-                # （即人为设定更低的买点）阻止交易,等待第二个较大的缺口出现。
-                if pred_rate < pred + additionl_rate:  # 6个点
+                if pred_rate < pred + additionl_rate:
                     return
             amount = calculate_buy_in_amount(funds=buy_in_amount, price=price_now)
         if amount == 0:
@@ -617,11 +625,18 @@ def scan_holding_list(max_trade_days: int):
         holding_days = row['holding_days']
         if holding_days == 1:
             return
-        # if the down gap is filled, sell out
         price_now = get_stock_realtime_price(row['ts_code'])
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
         if price_now is None:
             return
+        # 上涨不卖
+        if is_rising_or_not(row['ts_code'], price_now):
+            return
+        # 涨停不卖
+        up_limit = get_up_down_limit(code=row['ts_code'])[0]
+        if up_limit is not None and price_now / up_limit >= 0.98:
+            return
+        # if the down gap is filled, sell out
         fill_date = row['fill_date']
         if price_now >= row['target_price'] or fill_date != '':
             with lock:

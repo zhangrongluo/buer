@@ -325,7 +325,7 @@ def scan_buy_in_list():
         if price_now <= MIN_STOCK_PRICE:
             return
         down_limit = get_up_down_limit(code=code)[1]
-        if down_limit is not None and price_now / down_limit <= 1.01:  # if nearly down limit, dont buy in 
+        if down_limit is not None and price_now / down_limit <= 1.02:  # if nearly down limit, dont buy in 
             return
         # wait for the down trend to end
         if waiting_days <= MIN_WAITING_DAYS:  
@@ -474,7 +474,7 @@ def scan_holding_list():
             return
         # if nearly up limit, dont sell out
         up_limit = get_up_down_limit(code=row['ts_code'])[0]
-        if up_limit is not None and price_now / up_limit >= 0.99:
+        if up_limit is not None and price_now / up_limit >= 0.98:
             return
         # if rising now, dont sell out
         rising_or_not = is_rising_or_not(row['ts_code'], price_now)

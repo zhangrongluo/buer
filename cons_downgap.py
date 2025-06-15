@@ -7,7 +7,7 @@ os.makedirs(trade_root, exist_ok=True)  # 确保目录存在
 
 dataset_group_cons = {
     'group_50': {
-        'MODEL_NAME': 'DownGap_50',  # 模型名称
+        'MODEL_NAME': 'DownGap >>> 50',  # 模型名称
         'MAX_TRADE_DAYS': 50,  # group_id, 最大缺口回补天数，即最大持有天数(不含今日),影响训练集的长度
         'TEST_DATASET_PERCENT': 0.20,  # 测试集占训练集的比例
         'TRADE_COVERAGE_DAYS': 30,  # 即买入清单中记录的保留天数，即买入观察天数(不含今日)，影响交易集的长度
@@ -17,7 +17,7 @@ dataset_group_cons = {
         'MAX_STOCKS': 80,  # 最大持仓股票数
         'ONE_TIME_FUNDS': 60000,  # 单次买入资金
         'PRED_MODELS': 6,  # 预测交易集的模型数
-        'train_times': 0,  # 训练次数
+        'train_times': 12,  # 训练次数
         'initial_funds': 6e6,  # 初始资金600万
         'BUY_IN_LIST': os.path.join(trade_root, f'max_trade_days_50', 'buy_in_list.csv'),
         'HOLDING_LIST': os.path.join(trade_root, f'max_trade_days_50', 'holding_list.csv'),
@@ -27,7 +27,7 @@ dataset_group_cons = {
         'INDICATOR_CSV': os.path.join(trade_root, f'max_trade_days_50', 'statistic_indicator.csv'),
     },
     'group_45': {
-        'MODEL_NAME': 'DownGap_45',  # 模型名称
+        'MODEL_NAME': 'DownGap >>> 45',  # 模型名称
         'MAX_TRADE_DAYS': 45,
         'TEST_DATASET_PERCENT': 0.20,
         'TRADE_COVERAGE_DAYS': 25,
@@ -37,7 +37,7 @@ dataset_group_cons = {
         'MAX_STOCKS': 75,
         'ONE_TIME_FUNDS': 60000,
         'PRED_MODELS': 6,
-        'train_times': 24,  # 训练次数
+        'train_times': 12,  # 训练次数
         'initial_funds': 6e6,
         'BUY_IN_LIST': os.path.join(trade_root, f'max_trade_days_45', 'buy_in_list.csv'),
         'HOLDING_LIST': os.path.join(trade_root, f'max_trade_days_45', 'holding_list.csv'),
@@ -50,8 +50,8 @@ dataset_group_cons = {
         'COST_FEE': 0.0006,
         'MIN_STOCK_PRICE': 2.88,
         'PAUSE': 0.5,
-        'additionl_rate': 0.06,
-        'exception_list': ['退市', '退', 'PT', 'ST', 'XR'],
+        'additionl_rate': 0.02,
+        'exception_list': ['退市', '退', 'PT', 'ST'],
         'MAX_TRADE_DAYS_LIST': [50, 45],  # 最大交易天数列表    
     }
 }

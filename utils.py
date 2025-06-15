@@ -118,7 +118,7 @@ def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=10) -> pd.Dat
     }
     response = requests.get(url, headers=headers)
     data = response.json() if response.status_code == 200 else None
-    res_df = pd.DataFrame(data) if data else pd.DataFrame()
+    res_df = pd.DataFrame(data) if data else pd.DataFrame(columns=['day', 'open', 'high', 'low', 'close'])
     if not res_df.empty:
         today = datetime.datetime.now().strftime('%Y-%m-%d')
         res_df = res_df[res_df['day'].str.startswith(today)]

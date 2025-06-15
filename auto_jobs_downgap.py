@@ -100,7 +100,7 @@ def predict_dataset():
         MIN_PRED_RATE = dataset_group_cons[group].get('MIN_PRED_RATE')
         PRED_MODELS = dataset_group_cons[group].get('PRED_MODELS')
         SHUFFLE = dataset_group_cons[group].get('SHUFFLE')
-        model_name = dataset_group_cons[group].get('MODEL_NAME')
+        model_name_1 = dataset_group_cons[group].get('MODEL_NAME')
         if not MAX_TRADE_DAYS or PRED_MODELS == 0:
             continue
         # STEP1: process the gaps dataset
@@ -207,8 +207,7 @@ def predict_dataset():
         diff['diff_pct'] = diff['diff'] / diff['real']
         diff['diff_pct'] = diff['diff_pct'].apply(lambda x: f'{x:.2%}')
         pred_path = f'{predict_root}/max_trade_days_{MAX_TRADE_DAYS}'
-        if not os.path.exists(pred_path):
-            os.mkdir(pred_path)
+        os.makedirs(pred_path, exist_ok=True)
         csv_name = f'{pred_path}/test_pred_K.csv'
         diff.to_csv(csv_name, index=False)
         # filter the test dataset with diff['diff'] > MIN_PRED_RATE and plot bar chart
@@ -249,7 +248,7 @@ def predict_dataset():
         ]
         csv_name = f'{pred_path}/trade_pred_K.csv'
         diff.to_csv(csv_name, index=False)
-        print(f'({model_name}) 模型预测完成，结果保存在{csv_name}文件中')
+        print(f'({model_name_1}) 模型预测完成.')
 
 def train_dataset():
     """
@@ -261,7 +260,7 @@ def train_dataset():
         TRADE_COVERAGE_DAYS = dataset_group_cons[group].get('TRADE_COVERAGE_DAYS')
         SHUFFLE = dataset_group_cons[group].get('SHUFFLE')
         train_times = dataset_group_cons[group].get('train_times')
-        model_name = dataset_group_cons[group].get('MODEL_NAME')
+        model_name_1 = dataset_group_cons[group].get('MODEL_NAME')
         if MAX_TRADE_DAYS is None or train_times == 0:
             continue
         # STEP1 process the gaps dataset
@@ -329,11 +328,10 @@ def train_dataset():
 
         # STEP5 训练模型
         model_dir = f'{model_root}/max_trade_days_{MAX_TRADE_DAYS}'
-        if not os.path.exists(model_dir):
-            os.mkdir(model_dir)
+        os.makedirs(model_dir, exist_ok=True)
         name_prefix = 'model_with_K'
-        print('开始训练模型...')
-        for _ in range(50):
+        print(f'开始训练 ({model_name_1}) 模型...')
+        for _ in range(train_times):
             try:
                 now = time.strftime('%Y%m%d%H%M%S', time.localtime())
                 depth = random.choice([6, 7, 8])
@@ -367,7 +365,7 @@ def train_dataset():
                 os.rename(f'{model_dir}/{model_name}', f'{model_dir}/{new_model_name}')
             except Exception as e:
                 pass
-        print(f'({model_name}) 模型训练完成，模型保存在{model_dir}目录下')
+        print(f'({model_name_1}) 模型训练完成.')
 
 def build_buy_in_list():
     """
@@ -378,12 +376,11 @@ def build_buy_in_list():
         MIN_PRED_RATE = dataset_group_cons[group].get('MIN_PRED_RATE')
         PRED_RATE_PCT = dataset_group_cons[group].get('PRED_RATE_PCT')
         exception_list = dataset_group_cons['common'].get('exception_list')
-        model_name = dataset_group_cons[group].get('MODEL_NAME')
+        model_name_1 = dataset_group_cons[group].get('MODEL_NAME')
         if MAX_TRADE_DAYS is None:
             continue
         # prepare data from trade_pred.csv within TRADE_COVERAGE_DAYS days
         pred_path = f'{predict_root}/max_trade_days_{MAX_TRADE_DAYS}'
-        os.makedirs(pred_path, exist_ok=True)
         csv_name = f'{pred_path}/trade_pred_K.csv'
         trade_df = pd.read_csv(csv_name, dtype={'trade_date': str, 'fill_data': str})
         # add target_price column to trade_df, which is the row's pre_low
@@ -420,8 +417,11 @@ def build_buy_in_list():
         trade_df = trade_df[trade_df['pred'] > MIN_PRED_RATE]
         trade_df = trade_df[~trade_df['stock_name'].str.contains('|'.join(exception_list))]
         trade_df = trade_df.reset_index(drop=True)
-        trade_df.to_csv(f'{trade_root}/max_trade_days_{MAX_TRADE_DAYS}/buy_in_list.csv', index=False)
-        print(f'({model_name}) 买入清单生成完成')
+        trade_dir = f'{trade_root}/max_trade_days_{MAX_TRADE_DAYS}'
+        os.makedirs(trade_dir, exist_ok=True)
+        csv_name = f'{trade_dir}/buy_in_list.csv'
+        trade_df.to_csv(csv_name, index=False)
+        print(f'({model_name_1}) 买入清单生成完成')
 
 scheduler = BackgroundScheduler()
 scheduler.configure(timezone='Asia/Shanghai')
