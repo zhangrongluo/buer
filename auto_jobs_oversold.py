@@ -22,22 +22,24 @@ from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_da
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-def is_trade_day(func):
+def is_trade_day(task: str = None):
     """
     装饰器,判断是否为交易日,如果是则执行数据更新函数.
-    :param func: 待执行的函数
-    :return: wrapper函数
+    :param task: 任务名称
+    :return: 装饰器函数
     """
-    def wrapper(*args, **kwargs):
-        df = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
-        df = df.sort_values(by='cal_date', ascending=False)
-        res = df["is_open"][0]
-        if res:
-            return func(*args, **kwargs)
-        else:
-            today = datetime.datetime.now().strftime('%Y%m%d')
-            print(f'({MODEL_NAME}) {today} 不是交易日')
-    return wrapper
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            df = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
+            df = df.sort_values(by='cal_date', ascending=False)
+            res = df["is_open"][0]
+            if res:
+                return func(*args, **kwargs)
+            else:
+                today = datetime.datetime.now().strftime('%Y%m%d')
+                print(f'({MODEL_NAME}) {today} 不是交易日, 不执行 <{task}> 任务')
+        return wrapper    
+    return decorator
 
 def update_dataset():
     """
@@ -449,33 +451,33 @@ def update_trade_cal_and_stock_list():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 交易日历和股票列表更新完成！')
 
-@is_trade_day
+@is_trade_day(task='更新行情和指标数据')
 def update_daily_data_and_indicator():
     update_all_daily_data(step=5)
     update_all_daily_indicator(step=5)
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 行情和指标数据更新完成！')
 
-@is_trade_day
+@is_trade_day(task='更新和预测数据集')
 def update_and_predict_dataset():
     update_dataset()
     predict_dataset()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} oversold 数据集更新完成！')
 
-@is_trade_day
+@is_trade_day(task='构建买入清单')
 def build_buy_in_list_task():
     build_buy_in_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 买入清单更新完成！')
 
-@is_trade_day
+@is_trade_day(task='获取涨跌停表')
 def get_up_down_limit_list_task():
     get_up_down_limit_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 涨跌停表更新完成！')
 
-@is_trade_day
+@is_trade_day(task='更新复权因子和分红数据')
 def update_adj_factor_and_dividend_data_task():
     update_all_adj_factor_data()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
@@ -483,13 +485,13 @@ def update_adj_factor_and_dividend_data_task():
     download_all_dividend_data()
     print(f'({MODEL_NAME}) {today} 分红送股数据更新完成！')
 
-@is_trade_day
+@is_trade_day(task='计算今日统计指标')
 def calculate_today_statistics_indicators():
     calculate_today_series_statistic_indicator(name='oversold')
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 今日统计数据计算完成！')
 
-@is_trade_day
+@is_trade_day(task='清理屏幕')
 def clear_screen_task():
     os.system('cls' if os.name == 'nt' else 'clear')
     print(f'({MODEL_NAME}) oversold 模型自动运行中')
@@ -500,7 +502,7 @@ def train_and_predict_dataset():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} oversold 模型训练完成！')
 
-@is_trade_day
+@is_trade_day(task='备份交易数据')
 def backup_trade_data():
     """
     把TRADE_DIR/oversold目录下的所有文件备份到BACKUP_DIR/oversold/oversold_<备份时间>目录下
@@ -519,7 +521,7 @@ def backup_trade_data():
     print(f'({MODEL_NAME}) oversold 模型交易数据备份完成！')
 
 # 动态任务am
-@is_trade_day
+@is_trade_day(task='股票交易')
 def trading_task_am(scheduler):
     now = datetime.datetime.now().time()
     start_time = datetime.time(9, 20)  # 9:20 AM, start of trading
@@ -546,7 +548,7 @@ def trading_task_am(scheduler):
         print(f'({MODEL_NAME}) {now.time()} 不在交易时间段内.')
 
 # 动态任务pm
-@is_trade_day
+@is_trade_day(task='股票交易')
 def trading_task_pm(scheduler):
     now = datetime.datetime.now().time()
     start_time = datetime.time(12, 50)

@@ -36,22 +36,24 @@ os.makedirs(daily_root, exist_ok=True)
 backup_root = f'{BACKUP_DIR}/downgap'
 os.makedirs(backup_root, exist_ok=True)
 
-def is_trade_day(func):
+def is_trade_day(task: str = None):
     """
     装饰器,判断是否为交易日,如果是则执行数据更新函数.
-    :param func: 待执行的函数
-    :return: wrapper函数
+    :param task: 任务名称
+    :return: 装饰器函数
     """
-    def wrapper(*args, **kwargs):
-        df = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
-        df = df.sort_values(by='cal_date', ascending=False)
-        res = df["is_open"][0]
-        if res:
-            return func(*args, **kwargs)
-        else:
-            today = datetime.datetime.now().strftime('%Y%m%d')
-            print(f'({MODEL_NAME}) {today} 不是交易日')
-    return wrapper
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            df = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
+            df = df.sort_values(by='cal_date', ascending=False)
+            res = df["is_open"][0]
+            if res:
+                return func(*args, **kwargs)
+            else:
+                today = datetime.datetime.now().strftime('%Y%m%d')
+                print(f'({MODEL_NAME}) {today} 不是交易日, 不执行 <{task}> 任务')
+        return wrapper    
+    return decorator
 
 def update_dataset():
     """更新缺口数据"""
@@ -427,14 +429,14 @@ scheduler = BackgroundScheduler()
 scheduler.configure(timezone='Asia/Shanghai')
 
 # 定时任务函数定义
-@is_trade_day
+@is_trade_day(task='更新预测数据集')
 def update_and_predict_dataset():
     update_dataset()
     predict_dataset()
     today = datetime.datetime.now().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 数据更新完成')
 
-@is_trade_day
+@is_trade_day(task='更新买入清单')
 def update_buy_in_list():
     build_buy_in_list()
     today = datetime.datetime.now().strftime('%Y%m%d')
@@ -446,7 +448,7 @@ def train_and_predict_model():
     today = datetime.datetime.now().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 模型训练完成')
 
-@is_trade_day
+@is_trade_day(task='统计各项指标')
 def calculate_today_statistics_indicators():
     for group in dataset_group_cons:
         max_trade_days = dataset_group_cons[group].get('MAX_TRADE_DAYS')
@@ -456,7 +458,7 @@ def calculate_today_statistics_indicators():
     today = datetime.datetime.now().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 今日统计数据计算完成！')
 
-@is_trade_day
+@is_trade_day(task='备份交易数据')
 def backup_trade_data():
     """
     把TRADE_DIR/downgap/max_trade_days_{MAX_TRADE_DAYS}下的所有文件和目录备份到
@@ -485,7 +487,7 @@ def backup_trade_data():
     print(f'({MODEL_NAME}) {today} 交易数据备份完成！')
 
 # 动态任务am
-@is_trade_day
+@is_trade_day(task='股票交易')
 def trading_task_am(scheduler, max_trade_days: int):
     """
     上午交易任务
@@ -516,7 +518,7 @@ def trading_task_am(scheduler, max_trade_days: int):
         print(f'({MODEL_NAME}) {now.time()} 不在交易时间段内.')
 
 # 动态任务pm
-@is_trade_day
+@is_trade_day(task='股票交易')
 def trading_task_pm(scheduler, max_trade_days: int):
     """
     下午交易任务
