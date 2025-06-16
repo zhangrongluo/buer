@@ -13,7 +13,8 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
-                   get_up_down_limit, early_sell_standard, is_rising_or_not, is_decreasing_or_not)
+                   get_up_down_limit, early_sell_standard, is_rising_or_not, is_decreasing_or_not, 
+                   is_suspended_or_not)
 
 backup_dir = f'{BACKUP_DIR}/oversold'
 os.makedirs(backup_dir, exist_ok=True)
@@ -324,6 +325,9 @@ def scan_buy_in_list():
             return
         if price_now <= MIN_STOCK_PRICE:
             return
+        # suspended stocks, skip
+        if is_suspended_or_not(code=code):
+            return
         down_limit = get_up_down_limit(code=code)[1]
         if down_limit is not None and price_now / down_limit <= 1.02:  # if nearly down limit, dont buy in 
             return
@@ -471,6 +475,9 @@ def scan_holding_list():
         price_now = get_stock_realtime_price(row['ts_code'])
         print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
         if price_now is None or price_now <= 0:
+            return
+        # if suspended stocks, skip
+        if is_suspended_or_not(code=row['ts_code']):
             return
         # if nearly up limit, dont sell out
         up_limit = get_up_down_limit(code=row['ts_code'])[0]

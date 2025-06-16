@@ -11,7 +11,7 @@ from tensorflow import keras
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator
-from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list
+from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
 from trade_oversold import trade_process
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
@@ -477,6 +477,12 @@ def get_up_down_limit_list_task():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 涨跌停表更新完成！')
 
+@is_trade_day(task='更新停牌清单')
+def update_suspend_list_task():
+    get_suspend_stock_list()
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({MODEL_NAME}) {today} 停牌清单更新完成！')
+
 @is_trade_day(task='更新复权因子和分红数据')
 def update_adj_factor_and_dividend_data_task():
     update_all_adj_factor_data()
@@ -596,6 +602,12 @@ def auto_run():
         trigger='cron',
         hour=9, minute=15, misfire_grace_time=300,
         id='get_up_down_limit_list'
+    )
+    scheduler.add_job(
+        update_suspend_list_task,
+        trigger='cron',
+        hour=9, minute=20, misfire_grace_time=300,
+        id='update_suspend_list'
     )
     scheduler.add_job(
         backup_trade_data,

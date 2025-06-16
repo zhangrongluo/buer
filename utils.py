@@ -7,7 +7,7 @@ import requests
 import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
-from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR, TRADE_DIR
+from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_XLS
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
 from cons_hidden import xq_a_token
@@ -458,6 +458,21 @@ def is_within_trading_hours():
     time4 = datetime.time(15, 0)    # 下午 15:00
     return (time1 <= now <= time2) or (time3 <= now <= time4)
 
+def is_suspended_or_not(code: str) -> bool:
+    """
+    check if stock is suspended
+    :param code: stock code
+    :return: True if suspended, False otherwise
+    """
+    if len(code) == 6:
+        code = code + '.SH' if code.startswith('6') else code + '.SZ'
+    if not os.path.exists(SUSPEND_STOCK_XLS):
+        return False
+    if not is_trade_date_or_not():
+        return False
+    suspend_df = pd.read_excel(SUSPEND_STOCK_XLS, dtype={'ts_code': str})
+    return code in suspend_df['ts_code'].values
+
 ### statistics functions
 def calculate_win_rate_of_days(
         name : Literal['oversold', 'downgap'], 
@@ -509,7 +524,7 @@ def calculate_win_rate_of_stocks(
         max_trade_days, start=None, end=None
 ):
     """
-    Calculate the win rate based on number of stocks
+    Calculate the win rate based on number of sold_out stocks
     :param name: Name of the strategy or model, oversold or downgap
     :param max_trade_days: downgap dataset group_id
     :param start: 'YYYYMMDD' format, default is None (all data)
@@ -593,8 +608,6 @@ def get_stock_list_of_specific_date(
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     hd_csv = f'{trade_root}/holding_list.csv'
     hd_df = pd.read_csv(hd_csv, dtype={'date_in': str, 'date_out': str})
-    hd_df['date_in'] = hd_df['date_in'].apply(lambda x: x[:8] if isinstance(x, str) else x)
-    hd_df['date_out'] = hd_df['date_out'].apply(lambda x: x[:8] if isinstance(x, str) else x)
     hd_df = hd_df[hd_df['date_in'] <= date]
     hd_df = hd_df[(hd_df['date_out'] > date) | (hd_df['date_out'].isnull())]
     columns = ['ts_code', 'stock_name', 'industry', 'date_in', 'date_out', 'amount']

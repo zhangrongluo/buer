@@ -9,7 +9,7 @@ from cons_general import DATASETS_DIR, BASICDATA_DIR
 from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not,
-                   get_up_down_limit, is_decreasing_or_not, is_rising_or_not)
+                   get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not)
 from stocklist import get_name_and_industry_by_code
 
 daily_root = f'{BASICDATA_DIR}/dailydata'
@@ -418,6 +418,9 @@ def scan_buy_in_list(max_trade_days:int):
             return
         if price_now <= MIN_STOCK_PRICE:
             return
+        # 停牌不买
+        if is_suspended_or_not(code):
+            return
         # 下跌不买
         if is_decreasing_or_not(code, price_now):
             return
@@ -628,6 +631,9 @@ def scan_holding_list(max_trade_days: int):
         price_now = get_stock_realtime_price(row['ts_code'])
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
         if price_now is None:
+            return
+        # 停牌不卖
+        if is_suspended_or_not(row['ts_code']):
             return
         # 上涨不卖
         if is_rising_or_not(row['ts_code'], price_now):

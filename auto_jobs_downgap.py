@@ -577,6 +577,12 @@ def auto_run():
         name='Start_trading_program_at_9:26_AM_45',
     )
     scheduler.add_job(
+        backup_trade_data,
+        trigger='cron',
+        hour=11, minute=45, misfire_grace_time=300,
+        id='backup_trade_data_am'
+    )
+    scheduler.add_job(
         trading_task_pm,
         args=[scheduler, 50],
         trigger='cron',

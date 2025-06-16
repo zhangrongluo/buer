@@ -4,7 +4,7 @@
 import datetime
 import tushare as ts 
 import pandas as pd
-from cons_general import STOCK_LIST_XLS, TRADE_CAL_XLS, UP_DOWN_LIMIT_XLS
+from cons_general import STOCK_LIST_XLS, TRADE_CAL_XLS, UP_DOWN_LIMIT_XLS, SUSPEND_STOCK_XLS
 
 __all__ = ['get_name_and_industry_by_code', 'get_all_stocks_info', 'STOCK_LIST_NUMS', 'LIST_DF', 'pro']
 
@@ -73,8 +73,16 @@ def get_up_down_limit_list():
     """
     today = datetime.date.today().strftime('%Y%m%d')
     up_down_limit_df = pro.stk_limit(trade_date=today)
-    up_down_limit_df = up_down_limit_df.dropna(how='any')  # drop rows with any NaN values
+    up_down_limit_df = up_down_limit_df.dropna(how='any')
     up_down_limit_df.to_excel(UP_DOWN_LIMIT_XLS, index=False)
+
+def get_suspend_stock_list():
+    """
+    get today suspend stock list and save to the basicdata dir
+    """
+    today = datetime.date.today().strftime('%Y%m%d')
+    suspend_df = pro.suspend_d(suspend_type='S', trade_date=today)
+    suspend_df.to_excel(SUSPEND_STOCK_XLS, index=False)
 
 if __name__ == '__main__':
     # test
