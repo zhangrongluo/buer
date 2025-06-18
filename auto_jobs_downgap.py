@@ -452,6 +452,8 @@ def train_and_predict_model():
 def calculate_today_statistics_indicators():
     for group in dataset_group_cons:
         max_trade_days = dataset_group_cons[group].get('MAX_TRADE_DAYS')
+        if max_trade_days is None:
+            continue
         model_name = dataset_group_cons[group].get('MODEL_NAME')
         calculate_today_series_statistic_indicator(name='downgap', max_trade_days=max_trade_days)
         print(f'({model_name}) 统计指标计算完成')

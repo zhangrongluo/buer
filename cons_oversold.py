@@ -24,6 +24,9 @@ HOLDING_LIST = f'{TRADE_DIR}/oversold/holding_list.csv'  # 持仓清单
 DAILY_PROFIT = f'{TRADE_DIR}/oversold/daily_profit.csv'  # 每日盈亏
 FUNDS_LIST = f'{TRADE_DIR}/oversold/funds_change_list.csv'  # 资金清单
 TRADE_LOG = f'{TRADE_DIR}/oversold/trade.log'  # 交易日志
+INDICATOR_CSV = f'{TRADE_DIR}/oversold/indicator.csv'  # 指标数据
+XD_RECORD_HOLDGING_CSV = f'{TRADE_DIR}/oversold/xd_record_holding.csv'  # 盘中前复权和股数调整记录
+XD_RECORD_BUY_IN_CSV = f'{TRADE_DIR}/oversold/xd_record_buy_in.csv'  # 盘中前复权记录
 
 # TO_UPDATE == False, SKIP updating dataset
 dataset_to_update = [

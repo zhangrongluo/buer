@@ -275,6 +275,15 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
         return amount
     dividend_csv = f'{FINANDATA_DIR}/dividend/{code}.csv'
     if not os.path.exists(dividend_csv):
+        dividend_csv = f'{FINANDATA_DIR}/sina_dividend/{code}.csv'
+        if not os.path.exists(dividend_csv):
+            try:
+                from basic_data import download_dividend_data_from_sina
+                download_dividend_data_from_sina(ts_code=code)
+            except Exception as e:
+                print(f'{code} download_dividend_data_from_sina failed: {e}')
+                return amount
+    if not os.path.exists(dividend_csv):
         return amount
     dividend_df = pd.read_csv(dividend_csv, dtype={'ex_date': str})
     if dividend_df.empty:
@@ -287,7 +296,7 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
     xr_amount = amount
     for _, row in dividend_df.iterrows():
         ex_date = row['ex_date']  # 除权除息日期
-        if not (start <= ex_date <= end):
+        if not (start < ex_date <= end):
             continue
         div_per_stock = row['stk_div'] if pd.notna(row['stk_div']) else 0
         xr_amount = xr_amount * (1 + div_per_stock)

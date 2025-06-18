@@ -9,12 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, 
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST,
-                            DAILY_PROFIT, FUNDS_LIST, TRADE_LOG)
+                            DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV)
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
                    get_up_down_limit, early_sell_standard, is_rising_or_not, is_decreasing_or_not, 
-                   is_suspended_or_not)
+                   is_suspended_or_not, get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data)
 
 backup_dir = f'{BACKUP_DIR}/oversold'
 os.makedirs(backup_dir, exist_ok=True)
@@ -524,13 +524,141 @@ def scan_holding_list():
     with ThreadPoolExecutor() as executor:
         executor.map(scan_holding_list_row, idx_rows)
 
+def XD_buy_in_list():
+    """
+    盘中前复权 buy_point_base
+    NOTE:
+    save the result to XD_RECORD_BUY_IN_CSV(only one row),
+    XD_RECORD_BUY_IN_CSV contains columns: today, xd_or_not
+    """
+    if not os.path.exists(BUY_IN_LIST):
+        return
+    with lock:
+        buy_in_df = pd.read_csv(BUY_IN_LIST, dtype={'trade_date': str})
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    if not os.path.exists(XD_RECORD_BUY_IN_CSV):
+        xd_or_not = False
+        xd_record_df = pd.DataFrame([[today, xd_or_not]], columns=['today', 'xd_or_not'])
+        xd_record_df.to_csv(XD_RECORD_BUY_IN_CSV, index=False)
+    else:
+        xd_record_df = pd.read_csv(XD_RECORD_BUY_IN_CSV, dtype={'today': str})
+        xd_or_not = xd_record_df[xd_record_df['today'] == today]['xd_or_not'].values
+        if xd_or_not.size > 0:
+            xd_or_not = xd_or_not[0]
+        else:
+            xd_or_not = False
+        if xd_or_not:
+            # print(f'({MODEL_NAME}) {today} 买入清单今日已前复权, 不再处理')
+            return
+
+    def xd_buy_in_list_row(idx_row):
+        i, row = idx_row
+        ts_code = row['ts_code']
+        trade_date = row['trade_date']
+        buy_point_base = row['buy_point_base']
+        xd_buy_point_base = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=buy_point_base, start=trade_date
+        )
+        if xd_buy_point_base == buy_point_base:
+            return
+        buy_in_df.loc[i, 'buy_point_base'] = xd_buy_point_base
+
+    idx_rows = list(buy_in_df.iterrows())
+    with ThreadPoolExecutor() as executor:
+        executor.map(xd_buy_in_list_row, idx_rows)
+    with lock:
+        buy_in_df.to_csv(BUY_IN_LIST, index=False)
+    xd_or_not = True
+    xd_record_df = pd.DataFrame([[today, xd_or_not]], columns=['today', 'xd_or_not'])
+    xd_record_df.to_csv(XD_RECORD_BUY_IN_CSV, index=False)
+
+def XD_holding_list():
+    """
+    盘中前复权 buy_point_base 和 price_in, 对 amount 进行股数调整
+    前复权和股数调整记录在 XD_RECORD_CSV 中
+    NOTE:
+    XD_RECORD_CSV contains columns: ts_code, trade_date, xd_date, buy_point_base, 
+    price_in, amount, xd_buy_point_base, xd_price_in, xd_amount   
+    """
+    if not os.path.exists(HOLDING_LIST):
+        return
+    with lock:
+        holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str, 'date_in': str})
+        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
+        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    xd_record_df = []
+    columns = ['ts_code', 'trade_date', 'xd_date', 'buy_point_base', 'price_in', 'amount', 
+               'xd_buy_point_base', 'xd_price_in', 'xd_amount']
+    for idx_row in holding_df.iterrows():
+        i, row = idx_row
+        if row['status'] == 'sold_out':
+            continue
+        ts_code = row['ts_code']
+        trade_date = row['trade_date']
+        date_in = row['date_in']
+        buy_point_base = row['buy_point_base']
+        price_in = row['price_in']
+        amount = row['amount']
+        tmp_list = [ts_code, trade_date, today, buy_point_base, price_in, amount, ]
+        if not os.path.exists(XD_RECORD_HOLDGING_CSV):
+            start_buy_point_base = trade_date
+            start_price_in = date_in
+        else:
+            xd_df = pd.read_csv(XD_RECORD_HOLDGING_CSV, dtype={'trade_date': str, 'xd_date': str})
+            xd_df = xd_df.sort_values(by=['ts_code', 'xd_date'], ascending=[True, True])
+            xd_df = xd_df[xd_df['ts_code'] == ts_code]
+            if xd_df.empty:
+                start_buy_point_base = trade_date
+                start_price_in = date_in
+            else:
+                last_xd_date = xd_df.iloc[-1]['xd_date']
+                start_buy_point_base = last_xd_date if last_xd_date > trade_date else trade_date
+                start_price_in = last_xd_date if last_xd_date > date_in else date_in
+        xd_buy_point_base = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=buy_point_base, start=start_buy_point_base, end=today,
+        )
+        if xd_buy_point_base == buy_point_base:
+            continue
+        xd_price_in = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=price_in, start=start_price_in, end=today,
+        )
+        if xd_price_in == price_in:
+            xd_amount = amount
+            tmp_list.extend([xd_buy_point_base, xd_price_in, xd_amount])
+            xd_record_df.append(tmp_list)
+            holding_df.loc[i, 'buy_point_base'] = xd_buy_point_base
+            continue
+        xd_amount = get_XR_adjust_amount_by_dividend_data(
+            code=ts_code, amount=amount, start=start_price_in, end=today,
+        )
+        tmp_list.extend([xd_buy_point_base, xd_price_in, xd_amount])
+        xd_record_df.append(tmp_list)
+        holding_df.loc[i, 'buy_point_base'] = xd_buy_point_base
+        holding_df.loc[i, 'price_in'] = xd_price_in
+        holding_df.loc[i, 'amount'] = xd_amount
+    xd_df = pd.DataFrame(xd_record_df, columns=columns)
+    if xd_df.empty:
+        return
+    columns = ['ts_code', 'trade_date', 'xd_date', 'buy_point_base', 'xd_buy_point_base',
+               'price_in', 'xd_price_in', 'amount', 'xd_amount']
+    xd_df = xd_df[columns]
+    if not os.path.exists(XD_RECORD_HOLDGING_CSV):
+        xd_df.to_csv(XD_RECORD_HOLDGING_CSV, index=False)
+    else:
+        xd_df.to_csv(XD_RECORD_HOLDGING_CSV, mode='a', header=False, index=False)
+    with lock:
+        holding_df.to_csv(HOLDING_LIST, index=False)
+    # print(f'({MODEL_NAME}) 持有清单前复权和股数调整完成, 正在刷新列表...')
+    # refresh_holding_list()
+
 def trade_process():
     """
     trade period: buy_in sell_out refresh and backup
     NOTE: 
     buy_in_list.csv -> holding_list.csv -> daily_profit.csv
     """
-    scan_buy_in_list()
     refresh_holding_list()
+    scan_buy_in_list()
     scan_holding_list()
     create_daily_profit_list()

@@ -4,6 +4,8 @@ download and update daily data and daily indicator data for all stocks
 import os
 import datetime
 import pandas as pd
+import io
+import requests
 import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info, pro
@@ -183,6 +185,50 @@ def download_all_dividend_data(step: int = 5):
             executor.map(download_dividend_data, all_codes[i:i + step])
         bar.update(step)
     bar.close()
+
+def download_dividend_data_from_sina(ts_code: str):
+    """
+    get dividend data from sina finance
+    :param ts_code: stock code, 600036 or 600036.SH
+    :return: None
+    NOTE: 
+    ts_code should be in the format of 600036.SH or 000036.SZ,
+    then 600036.SH -> 600036, 000036.SZ -> 000036
+    """
+    ts_code = ts_code[:6] if len(ts_code) == 9 else ts_code
+    url = f'https://vip.stock.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/{ts_code}.phtml'
+    response = requests.get(url)
+    if response.status_code != 200:
+        return
+    try:
+        div_df = pd.read_html(io.StringIO(response.text))[12]
+        if div_df.empty:
+            return
+        div_df.columns = ['ann_date', 'stk_bo_rate', 'stk_co_rate', 'cash_div_tax', 'div_proc', \
+                        'ex_date', 'record_date', 'div_listdate', 'detail']
+        div_df = div_df[div_df.columns[:-1]]
+        ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
+        div_df.insert(0, 'ts_code', ts_code)
+        msg = get_name_and_industry_by_code(ts_code)
+        div_df.insert(1, 'name', msg[0])
+        div_df.insert(2, 'industry', msg[1])
+        div_df['stk_bo_rate'] = div_df['stk_bo_rate'].astype(float) / 10
+        div_df['stk_co_rate'] = div_df['stk_co_rate'].astype(float) / 10
+        div_df['cash_div_tax'] = div_df['cash_div_tax'].astype(float) / 10
+        div_df['stk_div'] = div_df['stk_bo_rate'] + div_df['stk_co_rate']
+        div_df['ann_date'] = div_df['ann_date'].apply(lambda x: x.replace('-', ''))
+        div_df['ex_date'] = div_df['ex_date'].apply(lambda x: x.replace('-', ''))
+        div_df['record_date'] = div_df['record_date'].apply(lambda x: x.replace('-', ''))
+        div_df['div_listdate'] = div_df['div_listdate'].apply(lambda x: x.replace('-', ''))
+        div_df = div_df[div_df['div_proc'] == '实施']
+        columns = ['ts_code', 'name', 'industry', 'ann_date', 'stk_div', 'stk_bo_rate', 'stk_co_rate', \
+                'cash_div_tax', 'div_proc', 'ex_date', 'record_date', 'div_listdate']
+        div_df = div_df[columns]
+        dest_dir = f'{FINANDATA_DIR}/sina_dividend'
+        os.makedirs(dest_dir, exist_ok=True)
+        div_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+    except Exception as e:
+        print(f'download {ts_code} {msg[0]} dividend data from sina Error: {e}')
 
 def download_adj_factor_data(ts_code: str):
     """

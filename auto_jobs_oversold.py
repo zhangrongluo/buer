@@ -13,7 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
-from trade_oversold import trade_process
+from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
                            TEST_DATASET_PERCENT, MODEL_NAME)
@@ -484,12 +484,24 @@ def update_suspend_list_task():
     print(f'({MODEL_NAME}) {today} 停牌清单更新完成！')
 
 @is_trade_day(task='更新复权因子和分红数据')
-def update_adj_factor_and_dividend_data_task():
-    update_all_adj_factor_data()
-    today = datetime.datetime.now().date().strftime('%Y%m%d')
-    print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
+def update_adj_dividend_data_and_XD_stock_and_trading_am_task():
     download_all_dividend_data()
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 分红送股数据更新完成！')
+    update_all_adj_factor_data()
+    print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
+    # 更新复权因子和分红数据后，执行盘中前复权和股数调整
+    XD_stock_list_task()
+    # 执行上午的股票交易任务
+    trading_task_am()
+
+@is_trade_day(task='盘中前复权和股数调整')
+def XD_stock_list_task():
+    XD_buy_in_list()
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({MODEL_NAME}) {today} 买入清单前复权调整完成！')
+    XD_holding_list()
+    print(f'({MODEL_NAME}) {today} 持有清单前复权和股数调整完成！')
 
 @is_trade_day(task='计算今日统计指标')
 def calculate_today_statistics_indicators():
@@ -523,7 +535,7 @@ def backup_trade_data():
     files = os.listdir(backup_root)
     dirs = [d for d in files if os.path.isdir(os.path.join(backup_root, d))]
     dirs.sort(reverse=True)
-    [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[6:]]  # 保留最近6个备份
+    [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[12:]]  # 保留最近12个备份
     print(f'({MODEL_NAME}) oversold 模型交易数据备份完成！')
 
 # 动态任务am
@@ -616,12 +628,6 @@ def auto_run():
         id='backup_trade_data_am'
     )
     scheduler.add_job(
-        update_adj_factor_and_dividend_data_task,
-        trigger='cron',
-        hour=12, minute=0, misfire_grace_time=300,
-        id='update_adj_factor_data'
-    )
-    scheduler.add_job(
         calculate_today_statistics_indicators,
         trigger='cron',
         hour=15, minute=5, misfire_grace_time=300,
@@ -654,12 +660,11 @@ def auto_run():
 
     # 动态任务
     scheduler.add_job(
-        trading_task_am,
-        args=[scheduler],
+        # include XD_stock_list and trading_task_am
+        update_adj_dividend_data_and_XD_stock_and_trading_am_task,
         trigger='cron',
-        hour=9, minute=25, misfire_grace_time=300,
-        id=f'{MODEL_NAME}_start_trading_job_am',
-        name='Start_trading_program_at_9:25_AM',
+        hour=9, minute=30, misfire_grace_time=300,
+        id='update_adj_factor_data'
     )
     scheduler.add_job(
         trading_task_pm,
