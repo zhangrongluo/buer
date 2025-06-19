@@ -25,6 +25,8 @@ dataset_group_cons = {
         'FUNDS_LIST': os.path.join(trade_root, f'max_trade_days_50', 'funds_change_list.csv'),
         'TRADE_LOG': os.path.join(trade_root, f'max_trade_days_50', 'trade.log'),
         'INDICATOR_CSV': os.path.join(trade_root, f'max_trade_days_50', 'statistic_indicator.csv'),
+        'XD_RECORD_HOLDING_CSV': os.path.join(trade_root, f'max_trade_days_50', 'xd_record_holding.csv'),
+        'XD_RECORD_BUY_IN_CSV': os.path.join(trade_root, f'max_trade_days_50', 'xd_record_buy_in.csv'),
     },
     'group_45': {
         'MODEL_NAME': 'DownGap >>> 45',  # 模型名称
@@ -34,7 +36,7 @@ dataset_group_cons = {
         'MIN_PRED_RATE': 0.135,
         'PRED_RATE_PCT': 1,
         'SHUFFLE': False,
-        'MAX_STOCKS': 75,
+        'MAX_STOCKS': 80,
         'ONE_TIME_FUNDS': 60000,
         'PRED_MODELS': 6,
         'train_times': 12,  # 训练次数
@@ -45,6 +47,8 @@ dataset_group_cons = {
         'FUNDS_LIST': os.path.join(trade_root, f'max_trade_days_45', 'funds_change_list.csv'),
         'TRADE_LOG': os.path.join(trade_root, f'max_trade_days_45', 'trade.log'),
         'INDICATOR_CSV': os.path.join(trade_root, f'max_trade_days_45', 'statistic_indicator.csv'),
+        'XD_RECORD_HOLDING_CSV': os.path.join(trade_root, f'max_trade_days_45', 'xd_record_holding.csv'),
+        'XD_RECORD_BUY_IN_CSV': os.path.join(trade_root, f'max_trade_days_45', 'xd_record_buy_in.csv'),
     },
     'common':{
         'COST_FEE': 0.0006,

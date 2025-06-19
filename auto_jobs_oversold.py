@@ -471,29 +471,25 @@ def build_buy_in_list_task():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 买入清单更新完成！')
 
-@is_trade_day(task='获取涨跌停表')
-def get_up_down_limit_list_task():
+@is_trade_day(task='获取涨跌停表、停牌清单和分红送股数据')
+def get_limit_and_suspend_list_and_dividend_task():
     get_up_down_limit_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 涨跌停表更新完成！')
-
-@is_trade_day(task='更新停牌清单')
-def update_suspend_list_task():
     get_suspend_stock_list()
-    today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 停牌清单更新完成！')
-
-@is_trade_day(task='更新复权因子和分红数据')
-def update_adj_dividend_data_and_XD_stock_and_trading_am_task():
     download_all_dividend_data()
-    today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 分红送股数据更新完成！')
+
+@is_trade_day(task='更新复权因子数据')
+def update_adj_data_and_XD_stock_and_trading_am_task():
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
     update_all_adj_factor_data()
     print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
     # 更新复权因子和分红数据后，执行盘中前复权和股数调整
     XD_stock_list_task()
     # 执行上午的股票交易任务
-    trading_task_am()
+    trading_task_am(scheduler=scheduler)
 
 @is_trade_day(task='盘中前复权和股数调整')
 def XD_stock_list_task():
@@ -610,16 +606,10 @@ def auto_run():
         id='update_buy_in_list'
     )
     scheduler.add_job(
-        get_up_down_limit_list_task,
-        trigger='cron',
-        hour=9, minute=15, misfire_grace_time=300,
-        id='get_up_down_limit_list'
-    )
-    scheduler.add_job(
-        update_suspend_list_task,
+        get_limit_and_suspend_list_and_dividend_task,
         trigger='cron',
         hour=9, minute=20, misfire_grace_time=300,
-        id='update_suspend_list'
+        id='get_limit_and_suspend_list_and_dividend_task'
     )
     scheduler.add_job(
         backup_trade_data,
@@ -661,9 +651,9 @@ def auto_run():
     # 动态任务
     scheduler.add_job(
         # include XD_stock_list and trading_task_am
-        update_adj_dividend_data_and_XD_stock_and_trading_am_task,
+        update_adj_data_and_XD_stock_and_trading_am_task,
         trigger='cron',
-        hour=9, minute=30, misfire_grace_time=300,
+        hour=9, minute=31, misfire_grace_time=300,
         id='update_adj_factor_data'
     )
     scheduler.add_job(

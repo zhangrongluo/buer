@@ -11,7 +11,7 @@ import tqdm
 from tensorflow import keras
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
-from trade_downgap import trade_process
+from trade_downgap import trade_process, XD_buy_in_list, XD_holding_list
 from datasets_downgap import get_gaps_statistic_data, refresh_the_gap_csv, merge_all_gap_data
 from cons_general import TRADE_CAL_XLS, TEMP_DIR, MODELS_DIR, PREDICT_DIR, TRADE_DIR, BASICDATA_DIR, DATASETS_DIR, BACKUP_DIR
 from cons_downgap import MODEL_NAME, dataset_group_cons
@@ -448,6 +448,20 @@ def train_and_predict_model():
     today = datetime.datetime.now().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 模型训练完成')
 
+@is_trade_day(task='盘中前复权和股数调整')
+def XD_stock_list_task():
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    for group in dataset_group_cons:
+        max_trade_days = dataset_group_cons[group].get('MAX_TRADE_DAYS')
+        model_name = dataset_group_cons[group].get('MODEL_NAME')
+        if max_trade_days is None:
+            continue
+        XD_buy_in_list(max_trade_days=max_trade_days)
+        print(f'({model_name}) {today} 买入清单盘中前复权完成')
+        XD_holding_list(max_trade_days=max_trade_days)
+        print(f'({model_name}) {today} 持有清单盘中前复权和股数调整完成')
+    print(f'({MODEL_NAME}) {today} 盘中前复权和股数调整完成')
+
 @is_trade_day(task='统计各项指标')
 def calculate_today_statistics_indicators():
     for group in dataset_group_cons:
@@ -563,20 +577,28 @@ def auto_run():
         name='每天00:30创建买入清单'
     )
     scheduler.add_job(
+        XD_stock_list_task,
+        trigger='cron',
+        # waiting for downloading adj factors data
+        hour=9, minute=43, misfire_grace_time=300,
+        id='XD_stock_list_task',
+        name='每天9:43盘中前复权和股数调整'
+    )
+    scheduler.add_job(
         trading_task_am,
         args=[scheduler, 50],
         trigger='cron',
-        hour=9, minute=25, misfire_grace_time=300,
+        hour=9, minute=45, misfire_grace_time=300,
         id=f'{MODEL_NAME}_start_trading_job_am_50',
-        name='Start_trading_program_at_9:25_AM_50',
+        name='Start_trading_program_at_9:45_AM_50',
     )
     scheduler.add_job(
         trading_task_am,
         args=[scheduler, 45],
         trigger='cron',
-        hour=9, minute=26, misfire_grace_time=300,
+        hour=9, minute=46, misfire_grace_time=300,
         id=f'{MODEL_NAME}_start_trading_job_am_45',
-        name='Start_trading_program_at_9:26_AM_45',
+        name='Start_trading_program_at_9:46_AM_45',
     )
     scheduler.add_job(
         backup_trade_data,
