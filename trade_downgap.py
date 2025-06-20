@@ -647,13 +647,13 @@ def scan_holding_list(max_trade_days: int):
         fill_date = row['fill_date']
         if price_now >= row['target_price'] or fill_date != '':
             with lock:
-                sell_out(row['ts_code'], price_now, row['trade_date'])
+                sell_out(row['ts_code'], price_now, row['trade_date'], max_trade_days=max_trade_days)
             trade_log.info(f'卖出 {row["ts_code"]} {row["stock_name"]}: the down gap is filled')
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
         if days >= MAX_TRADE_DAYS:
             with lock:
-                sell_out(row['ts_code'], price_now, row['trade_date'])
+                sell_out(row['ts_code'], price_now, row['trade_date'], max_trade_days=max_trade_days)
             trade_log.info(f'卖出 {row["ts_code"]} {row["stock_name"]}: Gap_days > {MAX_TRADE_DAYS}')
         # if rate_yearly >= 3.0 and holding_days >= 10, sell out in advance
         rate_yearly = row['rate_yearly']
@@ -661,7 +661,7 @@ def scan_holding_list(max_trade_days: int):
         rate_pct = row['rate_pct']
         if holding_days >= 10 and rate_yearly >= 3.0:
             with lock:
-                sell_out(row['ts_code'], price_now, row['trade_date'])
+                sell_out(row['ts_code'], price_now, row['trade_date'], max_trade_days=max_trade_days)
             trade_log.info(f'卖出 {row["ts_code"]} {row["stock_name"]}: reach the rate_yearly: \
                            {rate_yearly:.2%} within {holding_days} days')
     
