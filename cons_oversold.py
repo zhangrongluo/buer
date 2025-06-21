@@ -38,7 +38,7 @@ dataset_to_update = [
 
 # TIMES == 0, SKIP training dataset
 dataset_to_train = [
-    {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.35, 'TIMES': 12},
+    {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.35, 'TIMES': 0},
     {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.45, 'TIMES': 12},
     {'FORWARD_DAYS': 200, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.50, 'TIMES': 12},
     {'FORWARD_DAYS': 225, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.55, 'TIMES': 12},

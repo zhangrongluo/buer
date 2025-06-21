@@ -4,9 +4,11 @@ download and update daily data and daily indicator data for all stocks
 import os
 import datetime
 import pandas as pd
-import io
+import re
 import requests
 import tqdm
+from io import StringIO
+from DrissionPage import ChromiumOptions, Chromium
 from concurrent.futures import ThreadPoolExecutor
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info, pro
 from cons_general import BASICDATA_DIR, FINANDATA_DIR
@@ -201,7 +203,7 @@ def download_dividend_data_from_sina(ts_code: str):
     if response.status_code != 200:
         return
     try:
-        div_df = pd.read_html(io.StringIO(response.text))[12]
+        div_df = pd.read_html(StringIO(response.text))[12]
         if div_df.empty:
             return
         div_df.columns = ['ann_date', 'stk_bo_rate', 'stk_co_rate', 'cash_div_tax', 'div_proc', \
@@ -229,6 +231,69 @@ def download_dividend_data_from_sina(ts_code: str):
         div_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
     except Exception as e:
         print(f'download {ts_code} {msg[0]} dividend data from sina Error: {e}')
+
+def download_dividend_data_from_xueqiu(ts_code: str):
+    """
+    get dividend data from xueqiu
+    :param ts_code: stock code, 600036 or 600036.SH
+    :return: None
+    NOTE:
+    ts_code should be in the format of 600036.SH or 000036.SZ,
+    then 600036.SH -> SH600036, 000036.SZ -> SZ000036
+    """
+    ts_code = f'SH{ts_code[:6]}' if ts_code[0] == '6' else f'SZ{ts_code[:6]}'
+    url = f'https://xueqiu.com/snowman/S/{ts_code}/detail#/FHPS'
+    try:
+        co = ChromiumOptions()
+        co.headless().no_imgs().no_js()
+        browser = Chromium(co)
+        tab = browser.latest_tab
+        tab.get(url)
+        tab.wait.eles_loaded('tag:table@class=table table-bordered table-hover')
+        html = tab.ele('tag:table@class=table table-bordered table-hover')
+        div_df = pd.read_html(StringIO(html.html))[0]
+        if div_df.empty:
+            return
+        ts_code = ts_code[2:] + '.SH' if ts_code[0:2] == 'SH' else ts_code[2:] + '.SZ'
+        div_df.insert(0, 'ts_code', ts_code)
+        msg = get_name_and_industry_by_code(ts_code)
+        div_df.insert(1, 'name', msg[0])
+        div_df.insert(2, 'industry', msg[1])
+        div_df['stk_div'] = None
+        div_df['stk_bo_rate'] = None
+        div_df['stk_co_rate'] = None
+        div_df['cash_div_tax'] = None
+        div_df['div_proc'] = None
+        zg_pattern = re.compile(r'转(\d+\.?\d*)')
+        sg_pattern = re.compile(r'送(\d+\.?\d*)')
+        px_pattern = re.compile(r'派(\d+\.?\d*)')
+        for idx, row in div_df.iterrows():
+            try:
+                div_plan = row['方案']
+                zg = float(zg_pattern.search(div_plan).group(1)) if zg_pattern.search(div_plan) else None
+                sg = float(sg_pattern.search(div_plan).group(1)) if sg_pattern.search(div_plan) else None
+                px = float(px_pattern.search(div_plan).group(1)) if px_pattern.search(div_plan) else None
+                div_df.at[idx, 'stk_co_rate'] = zg/10 if zg else 0
+                div_df.at[idx, 'stk_bo_rate'] = sg/10 if sg else 0
+                div_df.at[idx, 'cash_div_tax'] = px/10 if px else 0
+                div_df.at[idx, 'stk_div'] = div_df.at[idx, 'stk_co_rate'] + div_df.at[idx, 'stk_bo_rate']
+                div_df.at[idx, 'div_proc'] = '实施' if '实施' in div_plan else None
+            except Exception as e:
+                print(f'Error processing row {idx} in dividend data: {e}')
+        div_df.columns = ['ts_code', 'name', 'industry', 'report', 'div_plan', 'reg_date', 'ex_date', 'pay_date', \
+                        'stk_div', 'stk_bo_rate', 'stk_co_rate', 'cash_div_tax', 'div_proc']
+        columns = ['ts_code', 'name', 'industry', 'report', 'div_plan', 'stk_div', 'stk_bo_rate', 'stk_co_rate', \
+                'cash_div_tax', 'div_proc', 'ex_date', 'pay_date']
+        div_df = div_df[columns]
+        div_df = div_df[div_df['div_proc'] == '实施']
+        div_df['ex_date'] = div_df['ex_date'].apply(lambda x: x.replace('-', ''))
+        div_df['pay_date'] = div_df['pay_date'].apply(lambda x: x.replace('-', ''))
+        dest_dir = f'{FINANDATA_DIR}/xueqiu_dividend'
+        os.makedirs(dest_dir, exist_ok=True)
+        div_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+        browser.quit()
+    except Exception as e:
+        print(f'download {ts_code} {msg[0]} dividend data from xueqiu Error: {e}')
 
 def download_adj_factor_data(ts_code: str):
     """

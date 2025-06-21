@@ -248,6 +248,26 @@ def get_qfq_price_DF_by_adj_factor(src_data: pd.DataFrame) -> pd.DataFrame:
     src_data_cp['pct_chg'] = src_data_cp['pct_chg'].round(4)
     return src_data_cp
 
+def tmp_download_div_data(ts_code: str, src: Literal['sina', 'xueqiu']='sina'):
+    """
+    下载分红数据
+    :param ts_code: 股票代码, 如 000001 或 000001.SZ
+    :param src: 数据来源, 'sina' 或 'xueqiu', 默认 'sina'
+    NOTE: 如果未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据   
+    """
+    if src == 'sina':
+        try:
+            from basic_data import download_dividend_data_from_sina
+            download_dividend_data_from_sina(ts_code=ts_code)
+        except Exception as e:
+            print(f'{ts_code} download_dividend_data_from_sina failed: {e}')
+    elif src == 'xueqiu':
+        try:
+            from basic_data import download_dividend_data_from_xueqiu
+            download_dividend_data_from_xueqiu(ts_code=ts_code)
+        except Exception as e:
+            print(f'{ts_code} download_dividend_data_from_xueqiu failed: {e}')
+
 def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = None) -> float:
     """
     根据XR送转股比例将start日股数转换到end日的股数
@@ -262,6 +282,7 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
     如有多次除权，按实施时间顺序从前到后依次计算(前复权)
     NOTE:
     参数错误直接返回原股数,不再抛出异常
+    如未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -275,13 +296,24 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
         return amount
     dividend_csv = f'{FINANDATA_DIR}/dividend/{code}.csv'
     if not os.path.exists(dividend_csv):
+        today = datetime.datetime.now().strftime('%Y%m%d')
         dividend_csv = f'{FINANDATA_DIR}/sina_dividend/{code}.csv'
-        try:
-            from basic_data import download_dividend_data_from_sina
-            download_dividend_data_from_sina(ts_code=code)
-        except Exception as e:
-            print(f'{code} download_dividend_data_from_sina failed: {e}')
-            return amount
+        if os.path.exists(dividend_csv):
+            mtime = os.path.getmtime(dividend_csv)
+            mtime = time.strftime('%Y%m%d', time.localtime(mtime))
+            if mtime != today:
+                tmp_download_div_data(ts_code=code, src='sina')
+        else:
+            tmp_download_div_data(ts_code=code, src='sina')
+        if not os.path.exists(dividend_csv):
+            dividend_csv = f'{FINANDATA_DIR}/xueqiu_dividend/{code}.csv'
+            if os.path.exists(dividend_csv):
+                mtime = os.path.getmtime(dividend_csv)
+                mtime = time.strftime('%Y%m%d', time.localtime(mtime))
+                if mtime != today:
+                    tmp_download_div_data(ts_code=code, src='xueqiu')
+            else:
+                tmp_download_div_data(ts_code=code, src='xueqiu')
     if not os.path.exists(dividend_csv):
         return amount
     dividend_df = pd.read_csv(dividend_csv, dtype={'ex_date': str})
