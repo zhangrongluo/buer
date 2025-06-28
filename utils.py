@@ -534,16 +534,15 @@ def is_suspended_or_not(code: str) -> bool:
 
 ### statistics functions
 def calculate_win_rate_of_days(
-        name : Literal['oversold', 'downgap'], 
-        max_trade_days, start=None, end=None, days=1
+        name : Literal['oversold', 'downgap'], start=None, end=None, days=1, **kwargs
 ):
     """
     Calculate the win rate based on number of days
     :param name: Name of the strategy or model, oversold or downgap
-    :param max_trade_days: downgap dataset group_id
     :param start: 'YYYYMMDD' format, default is None (all data)
     :param end: 'YYYYMMDD' format, default is None (all data)
     :param days: Number of days to calculate profit, default is 1
+    :param kwargs: e.g., max_trade_days for downgap strategy
     :return: Win rate (percentage)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
@@ -551,6 +550,16 @@ def calculate_win_rate_of_days(
     if name.upper() == 'OVERSOLD':
         trade_root = f'{TRADE_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     profit_csv = f'{trade_root}/daily_profit.csv'
     if not os.path.exists(profit_csv):
@@ -579,15 +588,14 @@ def calculate_win_rate_of_days(
     return win_rate
 
 def calculate_win_rate_of_stocks(
-        name: Literal['oversold', 'downgap'], 
-        max_trade_days, start=None, end=None
+        name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
 ):
     """
     Calculate the win rate based on number of sold_out stocks
     :param name: Name of the strategy or model, oversold or downgap
-    :param max_trade_days: downgap dataset group_id
     :param start: 'YYYYMMDD' format, default is None (all data)
     :param end: 'YYYYMMDD' format, default is None (all data)
+    :param kwargs: e.g., max_trade_days for downgap strategy
     :return: Win rate (percentage)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
@@ -595,6 +603,16 @@ def calculate_win_rate_of_stocks(
     if name.upper() == 'OVERSOLD':
         trade_root = f'{TRADE_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     holding_csv = f'{trade_root}/holding_list.csv'
     if not os.path.exists(holding_csv):
@@ -615,15 +633,14 @@ def calculate_win_rate_of_stocks(
     return win_rate
 
 def calculate_omega_ratio(
-        name: Literal['oversold', 'downgap'], 
-        max_trade_days, start=None, end=None
+        name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
 ):
     """
     Calculate omega ratio (total profit to total loss)
     :param name: Name of the strategy or model, oversold or downgap
-    :param max_trade_days: downgap dataset group_id
     :param start: 'YYYYMMDD' format, default is None (all data)
     :param end: 'YYYYMMDD' format, default is None (all data)
+    :param kwargs: e.g., max_trade_days for downgap strategy
     :return: Ratio of total profit to total loss
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
@@ -631,6 +648,16 @@ def calculate_omega_ratio(
     if name.upper() == 'OVERSOLD':
         trade_root = f'{TRADE_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     profit_csv = f'{trade_root}/daily_profit.csv'
     if not os.path.exists(profit_csv):
@@ -649,14 +676,13 @@ def calculate_omega_ratio(
     return total_profit / total_loss if total_loss != 0 else 0.0
 
 def get_stock_list_of_specific_date(
-        name: Literal['oversold', 'downgap'], 
-        max_trade_days, date: str
+        name: Literal['oversold', 'downgap'], date: str, **kwargs
 ) -> pd.DataFrame:
     """
     Get stock list of specific date
     :param name: Name of the strategy or model, oversold or downgap
-    :param max_trade_days: downgap dataset group_id
     :param date: 'YYYYMMDD' format
+    :param kwargs: e.g., max_trade_days for downgap strategy
     :return: List of stock codes for the specific date
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
@@ -664,6 +690,16 @@ def get_stock_list_of_specific_date(
     if name.upper() == 'OVERSOLD':
         trade_root = f'{TRADE_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     hd_csv = f'{trade_root}/holding_list.csv'
     hd_df = pd.read_csv(hd_csv, dtype={'date_in': str, 'date_out': str})
@@ -684,13 +720,13 @@ def get_stock_list_of_specific_date(
     return hd_df
 
 def calculate_profit_of_specific_date(
-        name: Literal['oversold', 'downgap'], max_trade_days, date: str
+        name: Literal['oversold', 'downgap'], date: str, **kwargs
 ) -> float:
     """
     Calculate the profit of specific date
     :param name: Name of the strategy or model, oversold or downgap
-    :param max_trade_days: downgap dataset group_id
     :param date: 'YYYYMMDD' format
+    :param kwargs: e.g., max_trade_days for downgap strategy
     :return: Profit of the specific date
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
@@ -698,6 +734,16 @@ def calculate_profit_of_specific_date(
     if name.upper() == 'OVERSOLD':
         trade_root = f'{TRADE_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     profit_csv = f'{trade_root}/daily_profit.csv'
     if not os.path.exists(profit_csv):
@@ -709,22 +755,31 @@ def calculate_profit_of_specific_date(
     return profit_df['delta'].sum()
 
 def calculate_return_ratio_of_specific_date(
-        name: Literal['oversold', 'downgap'], 
-        max_trade_days, date: str
+        name: Literal['oversold', 'downgap'], date: str, **kwargs
 ) -> float:
     """
     Calculate the return ratio of specific date
     :param name: Name of the strategy or model, oversold or downgap
-    :param max_trade_days: downgap dataset group_id
     :param date: 'YYYYMMDD' format
+    :param kwargs: e.g., max_trade_days for downgap strategy
     :return: Return ratio of the specific date
     NOTE:
     Return ratio = (total profit) / (total value of the stocks)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
-    profit = calculate_profit_of_specific_date(name, max_trade_days, date)
-    hd_df = get_stock_list_of_specific_date(name, max_trade_days, date)
+    if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+    profit = calculate_profit_of_specific_date(name, date, **kwargs)
+    hd_df = get_stock_list_of_specific_date(name, date, **kwargs)
     if hd_df.empty:
         return 0.0
     total_value = hd_df['value'].sum()
@@ -733,13 +788,12 @@ def calculate_return_ratio_of_specific_date(
     return round(profit / total_value, 4)
 
 def calculate_today_series_statistic_indicator(
-        name: Literal['oversold', 'downgap'],
-        max_trade_days: int = 50
+        name: Literal['oversold', 'downgap'], **kwargs
 ):
     """
     Calculate today's series statistic indicators
     :param name: Name of the strategy or model, oversold or downgap
-    :param max_trade_days: downgap dataset group_id
+    :param kwargs: e.g., max_trade_days for downgap strategy
     NOTE:
     - 'win_rate': Win rate of the strategy(1、5、10、20、30 days)
     - 'omega_ratio': Omega ratio of the strategy
@@ -749,23 +803,30 @@ def calculate_today_series_statistic_indicator(
         return
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
-    days_list = dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']
-    if max_trade_days not in days_list:
-        raise ValueError(f"max_trade_days {max_trade_days} not in {days_list}")
     if name.upper() == 'OVERSOLD':
         trade_root = f'{TRADE_DIR}/oversold'
     if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     indicator_csv = f'{trade_root}/statistic_indicator.csv'
-    win_rate_1 = calculate_win_rate_of_days(name, max_trade_days, days=1)
-    win_rate_5 = calculate_win_rate_of_days(name, max_trade_days, days=5)
-    win_rate_10 = calculate_win_rate_of_days(name, max_trade_days, days=10)
-    win_rate_20 = calculate_win_rate_of_days(name, max_trade_days, days=20)
-    win_rate_30 = calculate_win_rate_of_days(name, max_trade_days, days=30)
-    omega_ratio = calculate_omega_ratio(name, max_trade_days)
+    win_rate_1 = calculate_win_rate_of_days(name, days=1, **kwargs)
+    win_rate_5 = calculate_win_rate_of_days(name, days=5, **kwargs)
+    win_rate_10 = calculate_win_rate_of_days(name, days=10, **kwargs)
+    win_rate_20 = calculate_win_rate_of_days(name, days=20, **kwargs)
+    win_rate_30 = calculate_win_rate_of_days(name, days=30, **kwargs)
+    omega_ratio = calculate_omega_ratio(name, **kwargs)
     today = datetime.datetime.now().strftime('%Y%m%d')
-    return_ratio = calculate_return_ratio_of_specific_date(name, max_trade_days, today)
-    win_rate_stocks = calculate_win_rate_of_stocks(name, max_trade_days)
+    return_ratio = calculate_return_ratio_of_specific_date(name, today, **kwargs)
+    win_rate_stocks = calculate_win_rate_of_stocks(name, **kwargs)
     data = {
         'trade_date': today,
         'win_rate_1': round(win_rate_1, 4),
