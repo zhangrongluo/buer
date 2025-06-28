@@ -13,7 +13,7 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
-                   get_up_down_limit, early_sell_standard, is_rising_or_not, is_decreasing_or_not, 
+                   get_up_down_limit, early_sell_standard_oversold, is_rising_or_not, is_decreasing_or_not, 
                    is_suspended_or_not, get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data)
 
 backup_dir = f'{BACKUP_DIR}/oversold'
@@ -511,12 +511,13 @@ def scan_holding_list():
                 trade_log.info(msg)
         # sell out early or not
         rate_yearly = row['rate_yearly']
-        early_or_not = early_sell_standard(holding_days, rate_current, rate_yearly)
+        early_or_not = early_sell_standard_oversold(holding_days, rate_current, rate_yearly)
         if early_or_not:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
-                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: trigger early sell standard, \
-                    holding_days: {holding_days}, rate_current: {rate_current:.2%}, rate_yearly: {rate_yearly:.2%}'
+                msg = f"""卖出 {row["ts_code"]} {row["stock_name"]}, trigger early sell standard:
+                holding_days: {holding_days}, rate_current: {rate_current:.2%}, rate_yearly: {rate_yearly:.2%}
+                """
                 trade_log.info(msg)
 
     # 多线程扫描holding_list.csv

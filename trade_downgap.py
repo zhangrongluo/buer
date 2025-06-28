@@ -10,7 +10,7 @@ from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not,
                    get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not,
-                   get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data)
+                   get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, early_sell_standard_downgap)
 from stocklist import get_name_and_industry_by_code
 
 daily_root = f'{BASICDATA_DIR}/dailydata'
@@ -622,6 +622,9 @@ def scan_holding_list(max_trade_days: int):
         if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
             return
         i, row = idx_row
+        ts_code = row['ts_code']
+        stock_name = row['stock_name']
+        trade_date = row['trade_date']
         if row['date_out'] != '':
             return
         if row['status'] == 'sold_out':
@@ -629,42 +632,45 @@ def scan_holding_list(max_trade_days: int):
         holding_days = row['holding_days']
         if holding_days == 1:
             return
-        price_now = get_stock_realtime_price(row['ts_code'])
-        print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
+        price_now = get_stock_realtime_price(ts_code)
+        print(f'({MODEL_NAME}) {ts_code} {stock_name} price_now: {price_now}')
         if price_now is None:
             return
         # 停牌不卖
-        if is_suspended_or_not(row['ts_code']):
+        if is_suspended_or_not(ts_code):
             return
         # 上涨不卖
-        if is_rising_or_not(row['ts_code'], price_now):
+        if is_rising_or_not(ts_code, price_now):
             return
         # 涨停不卖
-        up_limit = get_up_down_limit(code=row['ts_code'])[0]
+        up_limit = get_up_down_limit(code=ts_code)[0]
         if up_limit is not None and price_now / up_limit >= 0.98:
             return
         # if the down gap is filled, sell out
         fill_date = row['fill_date']
         if price_now >= row['target_price'] or fill_date != '':
             with lock:
-                sell_out(row['ts_code'], price_now, row['trade_date'], max_trade_days=max_trade_days)
-            trade_log.info(f'卖出 {row["ts_code"]} {row["stock_name"]}: the down gap is filled')
+                sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
+            msg = f'卖出 {ts_code} {stock_name}: the down gap is filled'
+            trade_log.info(msg)
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
         if days >= MAX_TRADE_DAYS:
             with lock:
-                sell_out(row['ts_code'], price_now, row['trade_date'], max_trade_days=max_trade_days)
-            trade_log.info(f'卖出 {row["ts_code"]} {row["stock_name"]}: Gap_days > {MAX_TRADE_DAYS}')
+                sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
+            msg = f'卖出 {ts_code} {stock_name}: days > {MAX_TRADE_DAYS}'
+            trade_log.info(msg)
         # if rate_yearly >= 3.0 and holding_days >= 10, sell out in advance
+        rate_current = row['rate_current']
         rate_yearly = row['rate_yearly']
-        rate_pred = row['rate_pred']  # == MIN_PRED_RATE
-        rate_pct = row['rate_pct']
-        if holding_days >= 10 and rate_yearly >= 3.0:
+        early_or_not =  early_sell_standard_downgap(holding_days, rate_current, rate_yearly)
+        if early_or_not:
             with lock:
-                sell_out(row['ts_code'], price_now, row['trade_date'], max_trade_days=max_trade_days)
-            trade_log.info(f'卖出 {row["ts_code"]} {row["stock_name"]}: reach the rate_yearly: \
-                           {rate_yearly:.2%} within {holding_days} days')
-    
+                sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
+            msg = f"""
+            卖出 {ts_code} {stock_name}, trigger early sell standard: {rate_yearly:.2%} within {holding_days} days
+            """
+            trade_log.info(msg)
     # 多线程扫描holding_list.csv
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:

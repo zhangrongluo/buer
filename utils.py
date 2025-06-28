@@ -305,7 +305,9 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
                 tmp_download_div_data(ts_code=code, src='sina')
         else:
             tmp_download_div_data(ts_code=code, src='sina')
-        if not os.path.exists(dividend_csv):
+        try_xueqiu_again = (os.path.exists(dividend_csv) and \
+            time.strftime('%Y%m%d', time.localtime(os.path.getmtime(dividend_csv))) != today)
+        if not os.path.exists(dividend_csv) or try_xueqiu_again:
             dividend_csv = f'{FINANDATA_DIR}/xueqiu_dividend/{code}.csv'
             if os.path.exists(dividend_csv):
                 mtime = os.path.getmtime(dividend_csv)
@@ -403,7 +405,7 @@ def get_up_down_limit(code: str) -> tuple[float, float]:
     down_limit = res_df['down_limit'].values[0]
     return up_limit, down_limit
 
-def early_sell_standard(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
+def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
     """
     oversold 提前卖出标准
     :param holding_days: 持有天数
@@ -427,6 +429,23 @@ def early_sell_standard(holding_days: int, rate_current: float, rate_yearly: flo
     elif 30 <= holding_days < 60 and rate_yearly >= 2.63:
         return True
     elif 60 <= holding_days < 90 and rate_yearly >= 1.83:
+        return True
+    return False
+
+def early_sell_standard_downgap(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
+    """
+    downgap 提前卖出标准
+    :param holding_days: 持有天数
+    :param rate_current: 当前收益率
+    :param rate_yearly: 年化收益率
+    :return: True if should sell, False otherwise
+    NOTE:
+    rate_yearly 按照年 365 天计算
+    3.65 = 365/((10+20)/2)*((0.12+0.18)/2)
+    """
+    if holding_days < 10 and rate_current >= 0.15:
+        return True
+    elif 10 <= holding_days < 20 and rate_yearly >= 3.65:
         return True
     return False
 
