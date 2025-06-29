@@ -11,7 +11,7 @@ from tensorflow import keras
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator
-from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list
+from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
@@ -448,6 +448,7 @@ scheduler.configure(timezone='Asia/Shanghai')
 def update_trade_cal_and_stock_list():
     get_trade_cal()
     get_stock_list()
+    load_list_df()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 交易日历和股票列表更新完成！')
 

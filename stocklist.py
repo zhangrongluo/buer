@@ -9,6 +9,7 @@ from cons_general import STOCK_LIST_XLS, TRADE_CAL_XLS, UP_DOWN_LIMIT_XLS, SUSPE
 __all__ = ['get_name_and_industry_by_code', 'get_all_stocks_info', 'STOCK_LIST_NUMS', 'LIST_DF', 'pro']
 
 pro = ts.pro_api()
+LIST_DF = None
 
 def get_stock_list():
     """
@@ -34,10 +35,17 @@ def get_trade_cal():
 
 get_trade_cal()  # build trade calendar
 
-LIST_DF = pd.read_excel(STOCK_LIST_XLS, dtype=str)
-suffix = ['.sz', '.sh', '.SZ', '.SH']  # remove .BJ
-LIST_DF = LIST_DF[LIST_DF['ts_code'].str.contains('|'.join(suffix))]
-STOCK_LIST_NUMS = len(LIST_DF)
+def load_list_df():
+    """ 
+    load the latest stock list DataFrame from STOCK_LIST_XLS
+    and filter out the suffix for Shanghai and Shenzhen stocks.
+    """
+    global LIST_DF
+    suffix = ['.sz', '.sh', '.SZ', '.SH']
+    LIST_DF = pd.read_excel(STOCK_LIST_XLS, dtype=str)
+    LIST_DF = LIST_DF[LIST_DF['ts_code'].str.contains('|'.join(suffix))]
+
+load_list_df()
 
 def get_name_and_industry_by_code(ts_code: str) -> str|None:
     """
@@ -89,6 +97,6 @@ if __name__ == '__main__':
     print(get_name_and_industry_by_code('600036'))
     print(get_name_and_industry_by_code('000001.SZ'))
     print(get_all_stocks_info()[5:10])
-    print(STOCK_LIST_NUMS)
     print(get_all_stock_industry())
     print(len(get_all_stock_industry()))
+    print(LIST_DF.shape)
