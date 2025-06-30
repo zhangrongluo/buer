@@ -492,34 +492,35 @@ def scan_holding_list():
         if days >= MAX_TRADE_DAYS:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
-                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: days {days} >= {MAX_TRADE_DAYS}'
-                trade_log.info(msg)
+            msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: days {days} >= {MAX_TRADE_DAYS}'
+            trade_log.info(msg)
+            return
         # if rate_current <= MAX_DOWN_LIMIT, sell out
         rate_current = row['rate_current']
         if rate_current <= MAX_DOWN_LIMIT:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
-                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: rate_current {rate_current:.2%} <= {MAX_DOWN_LIMIT:.2%}'
-                trade_log.info(msg)
+            msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: rate_current {rate_current:.2%} <= {MAX_DOWN_LIMIT:.2%}'
+            trade_log.info(msg)
+            return
         # if reach the target rate, sell out
         base_point = row['buy_point_base']
         target_rate = row['target_rate']
         if price_now >= base_point * (1 + target_rate):
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
-                msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: reach the target_rate: {target_rate:.2%}'
-                trade_log.info(msg)
+            msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: reach the target_rate: {target_rate:.2%}'
+            trade_log.info(msg)
+            return
         # sell out early or not
         rate_yearly = row['rate_yearly']
         early_or_not = early_sell_standard_oversold(holding_days, rate_current, rate_yearly)
         if early_or_not:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])
-                msg = f"""卖出 {row["ts_code"]} {row["stock_name"]}, trigger early sell standard:
-                holding_days: {holding_days}, rate_current: {rate_current:.2%}, rate_yearly: {rate_yearly:.2%}
-                """
-                trade_log.info(msg)
-
+            msg = f'卖出 {row["ts_code"]} {row["stock_name"]}: trigger early sell standard: holding_days: {holding_days}, rate_yearly: {rate_yearly:.2%}'
+            trade_log.info(msg)
+            return
     # 多线程扫描holding_list.csv
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:

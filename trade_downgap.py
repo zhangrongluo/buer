@@ -653,6 +653,7 @@ def scan_holding_list(max_trade_days: int):
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
             msg = f'卖出 {ts_code} {stock_name}: the down gap is filled'
             trade_log.info(msg)
+            return
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
         if days >= MAX_TRADE_DAYS:
@@ -660,6 +661,7 @@ def scan_holding_list(max_trade_days: int):
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
             msg = f'卖出 {ts_code} {stock_name}: days > {MAX_TRADE_DAYS}'
             trade_log.info(msg)
+            return
         # if rate_yearly >= 3.0 and holding_days >= 10, sell out in advance
         rate_current = row['rate_current']
         rate_yearly = row['rate_yearly']
@@ -667,10 +669,9 @@ def scan_holding_list(max_trade_days: int):
         if early_or_not:
             with lock:
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
-            msg = f"""
-            卖出 {ts_code} {stock_name}, trigger early sell standard: {rate_yearly:.2%} within {holding_days} days
-            """
+            msg = f'卖出 {ts_code} {stock_name}: trigger early sell standard, rate_yearly {rate_yearly:.2%} within {holding_days} days'
             trade_log.info(msg)
+            return
     # 多线程扫描holding_list.csv
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:
