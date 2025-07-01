@@ -843,3 +843,102 @@ def calculate_today_series_statistic_indicator(
         df.to_csv(indicator_csv, index=False)
     else:
         df.to_csv(indicator_csv, mode='a', header=False, index=False)
+
+def calculate_information_ratio(
+        name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
+):
+    """
+    Calculate information ratio
+    :param name: Name of the strategy or model, oversold or downgap
+    :param start: 'YYYYMMDD' format, default is None (all data)
+    :param end: 'YYYYMMDD' format, default is None (all data)
+    :param kwargs: e.g., max_trade_days for downgap strategy
+    :return: Information ratio
+    NOTE:
+    Information ratio = (mean return) / (standard deviation of return) * sqrt(252)
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        trade_root = f'{TRADE_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
+        trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
+    indicator_csv = f'{trade_root}/statistic_indicator.csv'
+    if not os.path.exists(indicator_csv):
+        return 0.0
+    indicator_df = pd.read_csv(indicator_csv, dtype={'trade_date': str})
+    if start is not None:
+        indicator_df = indicator_df[indicator_df['trade_date'] >= start]
+    if end is not None:
+        indicator_df = indicator_df[indicator_df['trade_date'] <= end]
+    if indicator_df.empty:
+        return 0.0
+    indicator_df = indicator_df.sort_values(by='trade_date', ascending=True)
+    indicator_df = indicator_df.reset_index(drop=True)
+    return_mean = indicator_df['return_ratio'].mean()
+    return_std = indicator_df['return_ratio'].std()
+    if return_std == 0:
+        return 0.0
+    information_ratio = return_mean / return_std * (252 ** 0.5)  # 年化波动率
+    return round(information_ratio, 4)
+
+def calculate_sharpe_ratio(
+        name: Literal['oversold', 'downgap'], rf: float, start=None, end=None, **kwargs
+):
+    """
+    Calculate Sharpe ratio
+    :param name: Name of the strategy or model, oversold or downgap
+    :param rf: Risk-free rate, e.g., 0.03 for 3%
+    :param start: 'YYYYMMDD' format, default is None (all data)
+    :param end: 'YYYYMMDD' format, default is None (all data)
+    :param kwargs: e.g., max_trade_days for downgap strategy
+    :return: Sharpe ratio
+    NOTE:
+    Sharpe ratio = (mean return - risk-free rate) / (standard deviation of return) * sqrt(252)
+    risk-free rate normally is equal to 10-year government bond yield
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        trade_root = f'{TRADE_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
+        trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
+    indicator_csv = f'{trade_root}/statistic_indicator.csv'
+    if not os.path.exists(indicator_csv):
+        return 0.0
+    indicator_df = pd.read_csv(indicator_csv, dtype={'trade_date': str})
+    if start is not None:
+        indicator_df = indicator_df[indicator_df['trade_date'] >= start]
+    if end is not None:
+        indicator_df = indicator_df[indicator_df['trade_date'] <= end]
+    if indicator_df.empty:
+        return 0.0
+    indicator_df = indicator_df.sort_values(by='trade_date', ascending=True)
+    indicator_df = indicator_df.reset_index(drop=True)
+    return_mean = indicator_df['return_ratio'].mean()
+    return_std = indicator_df['return_ratio'].std()
+    if return_std == 0:
+        return 0.0
+    rf_daily = rf / 252  # 将年化无风险利率转换为日化
+    sharpe_ratio = (return_mean - rf_daily) / return_std * (252 ** 0.5)  # 年化夏普比率
+    return round(sharpe_ratio, 4)

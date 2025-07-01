@@ -162,8 +162,8 @@ def sell_out(code: str, price: float, trade_date: str) -> None:
     create_or_update_funds_change_list(cash_amount_sell, note)
     holding_df.to_csv(HOLDING_LIST, index=False)
     now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
-    trade_log.info(f'卖出 {code} {stock_name} {industry} at {price} at {now}')
-    trade_log.info(f'profit: {profit:.2f}, rate_current: {rate_current:.2%}, rate_yearly: {rate_yearly:.2%}')
+    msg = f'卖出 {code} {stock_name} {industry} at {price} total {amount}, profit: {profit:.2f}, rate_current: {rate_current:.2%}, rate_yearly: {rate_yearly:.2%}'
+    trade_log.info(msg)
     os.system(f'afplay /System/Library/Sounds/Hero.aiff')  # play sound to remind sell out
     os.system(f'afplay /System/Library/Sounds/Hero.aiff')  # play sound second times
     os.system(f'afplay /System/Library/Sounds/Hero.aiff')  # play sound third times
