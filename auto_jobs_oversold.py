@@ -13,10 +13,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
 from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
-from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list
+from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, clear_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
-                           TEST_DATASET_PERCENT, MODEL_NAME)
+                           TEST_DATASET_PERCENT, MODEL_NAME, DROP_ROWS_CSV)
 from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_data_csv, merge_all_oversold_dataset
 
 import warnings
@@ -448,8 +448,9 @@ scheduler.configure(timezone='Asia/Shanghai')
 def update_trade_cal_and_stock_list():
     get_trade_cal()
     get_stock_list()
-    load_list_df()
+    total_stocks = load_list_df()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({MODEL_NAME}) {today} 现追踪的股票列表总数: {total_stocks}')
     print(f'({MODEL_NAME}) {today} 交易日历和股票列表更新完成！')
 
 @is_trade_day(task='更新行情和指标数据')
@@ -469,6 +470,9 @@ def update_and_predict_dataset():
 @is_trade_day(task='构建买入清单')
 def build_buy_in_list_task():
     build_buy_in_list()
+    drop_rows = clear_buy_in_list()
+    if drop_rows is not None:
+        drop_rows.to_csv(DROP_ROWS_CSV, index=False)
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 买入清单更新完成！')
 

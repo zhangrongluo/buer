@@ -273,7 +273,7 @@ def scan_buy_in_list():
     # select the last day's data of a down trend
     buy_in_df = buy_in_df.sort_values(by=['ts_code', 'trade_date'], ascending=[True, True])
     buy_in_df = buy_in_df.drop_duplicates(subset='ts_code', keep='last')
-    # save rows which are not in holding_df with same ts_code and holding status
+    # save all_rows which are not in holding_df with same ts_code and holding status
     rows_not_holding = []
     for i, row in buy_in_df.iterrows():
         code = row['ts_code']
@@ -526,6 +526,84 @@ def scan_holding_list():
     with ThreadPoolExecutor() as executor:
         executor.map(scan_holding_list_row, idx_rows)
 
+def clear_buy_in_list(tolerance: float = 0.95) -> pd.DataFrame | None:
+    """
+    清理买入清单中实际下跌幅度未达到数据集 filter 筛选值的数据集
+    造成这种现象的原因是股票日行情数据未对价格每日前复权(尽管下载当日是最新的前复权数据),
+    但是在下一次分红派息送股之后,oversold 系统未对前面的数据进行前复权处理, 所以在计算下
+    跌幅度时,会发生夸大下跌幅度的现象,导致实际下跌幅度不够的下跌趋势被错误地计入了数据集。
+    :param tolerance: 容许的误差范围, 默认为 0.95, 即 5% 的误差
+    :return: 返回删除记录的 DataFrame, 包含 ts_code, stock_name, max_date_forward, 
+    trade_date, max_down_rate, max_down_rate_origin, src
+    NOTE:
+    处理方法如下: 获取 BUY_IN_LIST 中的 max_date_forward, 取当日的最高价, 将其和
+    buy_point_base前复权至 today,比较下跌幅度,如果小于 src 列中的 filter 筛选值(名称
+    中的最后一个数值),则保留该行数据,否则即删除该行数据
+    TODO:
+    在创建 oversold 数据集的时候,已经对价格进行了前复权处理,应该说不需要再打这个补丁了,不知道
+    为什么还是会出现这个问题?
+    NOTE:
+    检查发现在创建数据集的时候, 前复权代码作用域错误, 致使在新建 oversold 数据集时没有前复权。
+    """
+    if not os.path.exists(BUY_IN_LIST):
+        return
+    with lock:
+        buy_in_df = pd.read_csv(BUY_IN_LIST, dtype={'trade_date': str, 'max_date_forward': str})
+        buy_in_df['max_date_forward'] = buy_in_df['max_date_forward'].apply(lambda x: str(x)[:8])
+    to_drop_index = []
+    result = []
+    
+    def clear_buy_in_list_row(idx_row):
+        i, row = idx_row
+        ts_code = row['ts_code']
+        stock_name = row['stock_name']
+        trade_date = row['trade_date']
+        max_date_forward = row['max_date_forward']
+        max_down_rate_origin = row['max_down_rate']
+        buy_point_base = row['buy_point_base']
+        src = row['src']
+        filter_value = -float(src.split('.')[1]) / 100  # filter value from src
+        daily_csv = f'{BASICDATA_DIR}/dailydata/{ts_code}.csv'
+        daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
+        high_price_df = daily_df[daily_df['trade_date'] == max_date_forward]['high'].values
+        if high_price_df.size == 0:
+            return
+        high_price = high_price_df[0]
+        xd_high_price = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=high_price, start=max_date_forward
+        )
+        if xd_high_price == high_price:
+            return
+        xd_point_base = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=buy_point_base, start=trade_date
+        )
+        max_down_rate = (xd_point_base - xd_high_price) / xd_high_price
+        if abs(max_down_rate) / abs(filter_value) <= tolerance:
+            to_drop_index.append(i)
+            tmp = (ts_code, stock_name, max_date_forward, trade_date, max_down_rate, max_down_rate_origin, src)
+            result.append(tmp)
+    
+    idx_rows = list(buy_in_df.iterrows())
+    step = 8
+    for start in range(0, len(idx_rows), step):
+        end = start + step if start + step < len(idx_rows) else len(idx_rows)
+        idx_rows_batch = idx_rows[start:end]
+        with ThreadPoolExecutor() as executor:
+            executor.map(clear_buy_in_list_row, idx_rows_batch)
+    buy_in_df = buy_in_df.drop(index=to_drop_index)
+    buy_in_df = buy_in_df.reset_index(drop=True)
+    with lock:
+        buy_in_df.to_csv(BUY_IN_LIST, index=False)
+    if result:
+        result = set(result)  # 去重
+        columns = ['ts_code', 'stock_name', 'max_date_forward', 'trade_date', 'max_down_rate', 'max_down_rate_origin', 'src']
+        result_df = pd.DataFrame(result, columns=columns)
+        result_df = result_df.sort_values(by=['ts_code', 'trade_date'], ascending=[True, True])
+        result_df = result_df.reset_index(drop=True)
+        return result_df
+    else:
+        return
+    
 def XD_buy_in_list():
     """
     盘中前复权 buy_point_base
@@ -566,8 +644,14 @@ def XD_buy_in_list():
         buy_in_df.loc[i, 'buy_point_base'] = xd_buy_point_base
 
     idx_rows = list(buy_in_df.iterrows())
-    with ThreadPoolExecutor() as executor:
-        executor.map(xd_buy_in_list_row, idx_rows)
+    # 单一多线程模式优化为外层循环，内层多线程模式，每次循环使用 8 个线程, 减少线程创建和销毁的开销
+    all_rows = len(idx_rows)
+    step = 8
+    for start in range(0, all_rows, step):
+        end = start + step if start + step < all_rows else all_rows
+        idx_rows_batch = idx_rows[start:end]
+        with ThreadPoolExecutor() as executor:
+            executor.map(xd_buy_in_list_row, idx_rows_batch)
     with lock:
         buy_in_df.to_csv(BUY_IN_LIST, index=False)
     xd_or_not = True

@@ -17,6 +17,33 @@ os.makedirs(gap_root, exist_ok=True)
 temp_root = os.path.join(TEMP_DIR, 'downgap')
 os.makedirs(temp_root, exist_ok=True)
 
+def calculate_and_fill_rsi_indicator(df: pd.DataFrame, period: int = 14):
+    for i in range(len(df)):
+        if i < period:
+            continue
+        up = df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x > 0 else 0).sum()
+        down = abs(df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x < 0 else 0).sum())
+        rs = up /(down + 1e-10) if down == 0 else up / down
+        rsi = 100 - 100 / (1 + rs)
+        df.loc[i, f'RSI{period}'] = round(rsi, 2)
+
+def calculate_and_fill_k_indicator(df: pd.DataFrame, period: int = 14):
+    for i in range(len(df)):
+        if i < period:
+            continue
+        close = df.loc[i, 'close']
+        high = df.loc[i-period:i, 'high'].max()
+        low = df.loc[i-period:i, 'low'].min()
+        k = 100 * (close - low) / (high - low)
+        df.loc[i, 'K'] = round(k, 2)
+
+def calculate_and_fill_map_indicator(df: pd.DataFrame, period: int = 14):
+    for i in range(len(df)):
+        if i < period:
+            continue
+        map14 = df.loc[i-period:i, 'close'].sum() / period
+        df.loc[i, f'MAP{period}'] = round(map14, 2)
+
 def get_gaps_statistic_data(code: str):
     """ 
     获取股票和指数缺口及回补情况
@@ -56,66 +83,27 @@ def get_gaps_statistic_data(code: str):
     df['gap_percent'] = None      # 计算添加gap_percent列
     df.loc[df['gap'] == 'down', 'gap_percent'] = round((df['high'] - df['pre_low']) / df['pre_low'], 4)
     df.loc[df['gap'] == 'up', 'gap_percent'] = round((df['low'] - df['pre_high']) / df['pre_high'], 4)
-    # 使用前14天pct_chg 数据计算RSI = 100-100/(1+RS)
+    # 计算RSI指标
     period = 14
     df['RSI14'] = None
-    for i in range(len(df)):
-        if i < period:
-            continue
-        up = df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x > 0 else 0).sum()
-        down = abs(df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x < 0 else 0).sum())
-        rs = up /(down + 1e-10) if down == 0 else up / down
-        rsi = 100 - 100 / (1 + rs)
-        df.loc[i, 'RSI14'] = round(rsi, 2)
-    # 使用前7天pct_chg 数据计算RSI = 100-100/(1+RS)
+    calculate_and_fill_rsi_indicator(df, period)
     period = 7
     df['RSI7'] = None
-    for i in range(len(df)):
-        if i < period:
-            continue
-        up = df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x > 0 else 0).sum()
-        down = abs(df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x < 0 else 0).sum())
-        rs = up /(down + 1e-10) if down == 0 else up / down
-        rsi = 100 - 100 / (1 + rs)
-        df.loc[i, 'RSI7'] = round(rsi, 2)
-    # 使用前3天pct_chg 数据计算RSI = 100-100/(1+RS)
+    calculate_and_fill_rsi_indicator(df, period)
     period = 3
     df['RSI3'] = None
-    for i in range(len(df)):
-        if i < period:
-            continue
-        up = df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x > 0 else 0).sum()
-        down = abs(df.loc[i-period:i, 'pct_chg'].apply(lambda x: x if x < 0 else 0).sum())
-        rs = up /(down + 1e-10) if down == 0 else up / down
-        rsi = 100 - 100 / (1 + rs)
-        df.loc[i, 'RSI3'] = round(rsi, 2)
+    calculate_and_fill_rsi_indicator(df, period)
     # 使用前14天价格计算K指标=100*(close-min)/(max-min)
     period = 14
     df['K'] = None
-    for i in range(len(df)):
-        if i < period:
-            continue
-        close = df.loc[i, 'close']
-        high = df.loc[i-period:i, 'high'].max()
-        low = df.loc[i-period:i, 'low'].min()
-        k = 100 * (close - low) / (high - low)
-        df.loc[i, 'K'] = round(k, 2)
+    calculate_and_fill_k_indicator(df, period)
     # 使用前14天价格计算MAP指标=sum(close)/14
     period = 14
     df['MAP14'] = None
-    for i in range(len(df)):
-        if i < period:
-            continue
-        map14 = df.loc[i-period:i, 'close'].sum() / period
-        df.loc[i, 'MAP14'] = round(map14, 2)
-    # 使用前7天价格计算MAP指标=sum(close)/7
+    calculate_and_fill_map_indicator(df, period)
     period = 7
     df['MAP7'] = None
-    for i in range(len(df)):
-        if i < period:
-            continue
-        map7 = df.loc[i-period:i, 'close'].sum() / period
-        df.loc[i, 'MAP7'] = round(map7, 2)
+    calculate_and_fill_map_indicator(df, period)
     # 遍历df每一行,获取回补的日期,计算回补期间的涨幅
     # 如果某行的gap为down,记录该行的pre_low值为low0, 然后从该行下一行开始查找
     # high>low0的行， 记录该行trade_date日期为fill_date

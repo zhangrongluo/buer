@@ -44,6 +44,8 @@ def load_list_df():
     suffix = ['.sz', '.sh', '.SZ', '.SH']
     LIST_DF = pd.read_excel(STOCK_LIST_XLS, dtype=str)
     LIST_DF = LIST_DF[LIST_DF['ts_code'].str.contains('|'.join(suffix))]
+    total_stocks = LIST_DF.shape[0]
+    return total_stocks
 
 load_list_df()
 

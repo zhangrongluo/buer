@@ -37,6 +37,8 @@ def calculate_K_indicator(df: pd.DataFrame, period: int = 14):
     max_price = df_k['high'].max()
     min_price = df_k['low'].min()
     close = df_k.iloc[-1]['close']
+    if max_price == min_price:
+        return None
     K = 100 * (close - min_price) / (max_price - min_price)
     return round(K, 2)
 
@@ -96,8 +98,8 @@ def create_stock_max_down_dataset(params: tuple):
         trade_date_index = df_daily[df_daily['trade_date'] == last_date].index[0]  # 从此开始计算
         df_daily = df_daily.loc[trade_date_index-FORWARD_DAYS:]
         df_daily = df_daily.reset_index(drop=True)
-        df_daily = get_qfq_price_DF_by_adj_factor(df_daily)  # 前复权价格序列
 
+    df_daily = get_qfq_price_DF_by_adj_factor(df_daily)  # 前复权价格序列
     trade_csv = f'{BASICDATA_DIR}/dailyindicator/{code}.csv'
     df_trade = pd.read_csv(trade_csv, dtype={'trade_date': str})
     df_trade['trade_date'] = df_trade['trade_date'].apply(lambda x: str(x)[:8])
