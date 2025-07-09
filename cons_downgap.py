@@ -14,7 +14,7 @@ dataset_group_cons = {
         'MIN_PRED_RATE': 0.15,  # 预期收益率下限，用于筛选交易数据集，低于此收益率的数据集不列入交易清单
         'PRED_RATE_PCT': 0.9,  # 预期收益率折扣百分比
         'SHUFFLE': False,  # 是否打乱测试集
-        'MAX_STOCKS': 80,  # 最大持仓股票数
+        'MAX_STOCKS': 60,  # 最大持仓股票数
         'ONE_TIME_FUNDS': 60000,  # 单次买入资金
         'PRED_MODELS': 6,  # 预测交易集的模型数
         'train_times': 15,  # 训练次数
@@ -36,7 +36,7 @@ dataset_group_cons = {
         'MIN_PRED_RATE': 0.135,
         'PRED_RATE_PCT': 1,
         'SHUFFLE': False,
-        'MAX_STOCKS': 80,
+        'MAX_STOCKS': 60,
         'ONE_TIME_FUNDS': 60000,
         'PRED_MODELS': 6,
         'train_times': 15,  # 训练次数
