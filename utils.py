@@ -7,7 +7,7 @@ import requests
 import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
-from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_XLS
+from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_XLS, TEMP_DIR
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
 from cons_hidden import xq_a_token
@@ -942,3 +942,47 @@ def calculate_sharpe_ratio(
     rf_daily = rf / 252  # 将年化无风险利率转换为日化
     sharpe_ratio = (return_mean - rf_daily) / return_std * (252 ** 0.5)  # 年化夏普比率
     return round(sharpe_ratio, 4)
+
+def get_all_gaps_statistic_infomation() -> pd.DataFrame | None:
+    """
+    获取所有缺口的统计信息
+    :return: DataFrame with statistics or None if no data
+    NOTE:
+    统计信息包括:
+    - total_gaps: 总缺口数量
+    - filled_gaps: 已回补的缺口数量
+    - gaps_filled_rate: 全部缺口回补率
+    - down_gaps: 向下缺口数量
+    - filled_down_gaps: 已回补的向下缺口数量
+    - down_gaps_filled_rate: 向下缺口回补率
+    - up_gaps: 向上缺口数量
+    - filled_up_gaps: 已回补的向上缺口数量
+    - up_gaps_filled_rate: 向上缺口回补率
+    """
+    max_trade_days = dataset_group_cons['common'].get('MAX_TRADE_DAYS_LIST')
+    if max_trade_days is None:
+        return
+    max_trade_days = max(max_trade_days)
+    all_gaps_csv = f'{TEMP_DIR}/downgap/max_trade_days_{int(max_trade_days)}/all_gap_data.csv'
+    if not os.path.exists(all_gaps_csv):
+        return
+    all_gaps_df = pd.read_csv(all_gaps_csv, dtype={'trade_date': str})
+    if all_gaps_df.empty:
+        return
+    result = {}
+    result['total_gaps'] = len(all_gaps_df)
+    filled_gaps = all_gaps_df[all_gaps_df['fill_date'].notna()]
+    result['filled_gaps'] = len(filled_gaps)
+    result['gaps_filled_rate'] = round(result['filled_gaps'] / result['total_gaps'], 4)
+    down_gaps = all_gaps_df[all_gaps_df['gap'] == 'down']
+    result['down_gaps'] = len(down_gaps)
+    filled_down_gaps = down_gaps[down_gaps['fill_date'].notna()]
+    result['filled_down_gaps'] = len(filled_down_gaps)
+    result['down_gaps_filled_rate'] = round(result['filled_down_gaps'] / result['down_gaps'], 4)
+    up_gaps = all_gaps_df[all_gaps_df['gap'] == 'up']
+    result['up_gaps'] = len(up_gaps)
+    filled_up_gaps = up_gaps[up_gaps['fill_date'].notna()]
+    result['filled_up_gaps'] = len(filled_up_gaps)
+    result['up_gaps_filled_rate'] = round(result['filled_up_gaps'] / result['up_gaps'], 4)
+    result_df = pd.DataFrame([result])
+    return result_df

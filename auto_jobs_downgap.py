@@ -317,11 +317,18 @@ def train_dataset():
         def get_model(depth: int = 6, dropout_rate: float = 0.5):
             inputs = keras.Input(shape=(x_train.shape[1],))
             feature = layers.BatchNormalization()(inputs)
+            residual = feature
             for dep in range(depth+3, 4, -1):
                 feature = layers.Dense(2**dep, activation='relu')(feature)
                 if dep % 3 == 0:
                     feature = layers.BatchNormalization()(feature)
                 feature = layers.Dropout(dropout_rate)(feature)
+                if dep == 7:  # 残差连接
+                    if feature.shape[1] != residual.shape[1]:
+                        residual = layers.Dense(feature.shape[1])(residual)
+                        feature = layers.add([feature, residual])
+                    else:
+                        feature = layers.add([feature, residual])
             outputs = layers.Dense(1)(feature)
             model = keras.Model(inputs, outputs)
             optimizer = random.choice(['adam', 'rmsprop', 'sgd'])
@@ -497,7 +504,7 @@ def backup_trade_data():
         files = os.listdir(group_backup_root)
         dirs = [d for d in files if os.path.isdir(os.path.join(group_backup_root, d))]
         dirs.sort(reverse=True)
-        [shutil.rmtree(os.path.join(group_backup_root, d)) for d in dirs[6:]]  # 保留最近6个备份
+        [shutil.rmtree(os.path.join(group_backup_root, d)) for d in dirs[12:]]  # 保留最近12个备份
         print(f'({model_name}) 交易数据备份完成！')
     today = datetime.datetime.now().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 交易数据备份完成！')

@@ -358,10 +358,15 @@ def scan_buy_in_list():
                 return
             buy_in(code, price_now, amount, trade_date, buy_point_base, target_rate)
 
-    # 多线程扫描buy_in_list.csv
+    # 循环+多线程扫描buy_in_list.csv
     idx_rows = list(buy_in_df.iterrows())
-    with ThreadPoolExecutor() as executor:
-        executor.map(scan_buy_in_list_row, idx_rows)
+    steps = 8
+    for start in range(0, len(idx_rows), steps):
+        end = start + steps if start + steps < len(idx_rows) else len(idx_rows)
+        idx_rows_batch = idx_rows[start:end]
+        # 使用线程池执行多线程扫描  
+        with ThreadPoolExecutor() as executor:
+            executor.map(scan_buy_in_list_row, idx_rows_batch)
 
 # 持续刷新holding_list.csv
 def refresh_holding_list():
@@ -437,8 +442,13 @@ def refresh_holding_list():
     
     # 多线程刷新holding_list.csv
     idx_rows = list(holding_df.iterrows())
-    with ThreadPoolExecutor() as executor:
-        executor.map(refresh_holding_list_row, idx_rows)
+    steps = 8
+    for start in range(0, len(idx_rows), steps):
+        end = start + steps if start + steps < len(idx_rows) else len(idx_rows)
+        idx_rows_batch = idx_rows[start:end]
+        # 使用线程池执行多线程刷新
+        with ThreadPoolExecutor() as executor:
+            executor.map(refresh_holding_list_row, idx_rows_batch)
     with lock:
         holding_df.to_csv(HOLDING_LIST, index=False)
 
@@ -523,8 +533,13 @@ def scan_holding_list():
             return
     # 多线程扫描holding_list.csv
     idx_rows = list(holding_df.iterrows())
-    with ThreadPoolExecutor() as executor:
-        executor.map(scan_holding_list_row, idx_rows)
+    steps = 8
+    for start in range(0, len(idx_rows), steps):
+        end = start + steps if start + steps < len(idx_rows) else len(idx_rows)
+        idx_rows_batch = idx_rows[start:end]
+        # 使用线程池执行多线程扫描
+        with ThreadPoolExecutor() as executor:
+            executor.map(scan_holding_list_row, idx_rows_batch)
 
 def clear_buy_in_list(tolerance: float = 0.95) -> pd.DataFrame | None:
     """
