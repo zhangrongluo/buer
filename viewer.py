@@ -5,15 +5,18 @@ from utils import  calculate_sharpe_ratio
 
 oversold_hd_csv = 'trade/oversold/holding_list.csv'
 oversold_indicator_csv = 'trade/oversold/statistic_indicator.csv'
+oversold_profit_csv = 'trade/oversold/daily_profit.csv'
 downgap_hd_csv_45 = 'trade/downgap/max_trade_days_45/holding_list.csv'
 downgap_indicator_csv_45 = 'trade/downgap/max_trade_days_45/statistic_indicator.csv'
+downgap_profit_csv_45 = 'trade/downgap/max_trade_days_45/daily_profit.csv'
 downgap_hd_csv_50 = 'trade/downgap/max_trade_days_50/holding_list.csv'
 downgap_indicator_csv_50 = 'trade/downgap/max_trade_days_50/statistic_indicator.csv'
+downgap_profit_csv_50 = 'trade/downgap/max_trade_days_50/daily_profit.csv'
 rf_rate = 0.016  # 无风险利率
 
 class MainFrame(wx.Frame):
     def __init__(self):
-        super().__init__(None, title="股票清单和策略指标- Oversold 策略", size=self.get_initial_size())
+        super().__init__(None, title="股票清单和策略指标 - Oversold 策略", size=self.get_initial_size())
         
         # 创建主面板
         self.panel = wx.Panel(self)
@@ -127,19 +130,19 @@ class MainFrame(wx.Frame):
         self.holding_count_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         
         # 日期胜率指标
-        self.win_rate_1_label = wx.StaticText(self.indicator_panel, label="日期胜率1天: --", pos=(145, 20))
+        self.win_rate_1_label = wx.StaticText(self.indicator_panel, label="1天胜率: --", pos=(145, 20))
         self.win_rate_1_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         
-        self.win_rate_5_label = wx.StaticText(self.indicator_panel, label="日期胜率5天: --", pos=(285, 20))
+        self.win_rate_5_label = wx.StaticText(self.indicator_panel, label="5天胜率: --", pos=(285, 20))
         self.win_rate_5_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
 
-        self.win_rate_10_label = wx.StaticText(self.indicator_panel, label="日期胜率10天: --", pos=(425, 20))
+        self.win_rate_10_label = wx.StaticText(self.indicator_panel, label="10天胜率: --", pos=(425, 20))
         self.win_rate_10_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
 
-        self.win_rate_20_label = wx.StaticText(self.indicator_panel, label="日期胜率20天: --", pos=(565, 20))
+        self.win_rate_20_label = wx.StaticText(self.indicator_panel, label="20天胜率: --", pos=(565, 20))
         self.win_rate_20_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
 
-        self.win_rate_30_label = wx.StaticText(self.indicator_panel, label="日期胜率30天: --", pos=(705, 20))
+        self.win_rate_30_label = wx.StaticText(self.indicator_panel, label="30天胜率: --", pos=(705, 20))
         self.win_rate_30_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         
         # 第二行指标：数量胜率、Omega指标和信息比例等
@@ -155,12 +158,17 @@ class MainFrame(wx.Frame):
         self.sharpe_ratio_label = wx.StaticText(self.indicator_panel, label="夏普比率: --", pos=(285, 60))
         self.sharpe_ratio_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         
-        # 当日收益指标
-        self.daily_return_label = wx.StaticText(self.indicator_panel, label="当日收益: --", pos=(425, 60))
+        # 今日收益率指标
+        self.daily_return_label = wx.StaticText(self.indicator_panel, label="今日收益率: --", pos=(425, 60))
         self.daily_return_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         
-        # 预留第二行的其他两个位置
-        # 可以在这里添加更多指标，位置分别是 (565, 60), (705, 60)
+        # 今日利润指标
+        self.daily_profit_label = wx.StaticText(self.indicator_panel, label="今日利润: --", pos=(565, 60))
+        self.daily_profit_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        
+        # 累计利润指标
+        self.total_profit_label = wx.StaticText(self.indicator_panel, label="累计利润: --", pos=(705, 60))
+        self.total_profit_label.SetFont(wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         
         # 添加到右侧布局
         right_sizer.Add(self.stock_list_panel, 1, wx.EXPAND|wx.ALL, 0)  # proportion=1，占用剩余空间
@@ -174,7 +182,7 @@ class MainFrame(wx.Frame):
         self.panel.SetSizer(main_sizer)
         
         # 初始化完成后预先加载oversold策略内容
-        self.load_csv_content(oversold_hd_csv, oversold_indicator_csv)
+        self.load_csv_content(oversold_hd_csv, oversold_indicator_csv, oversold_profit_csv)
     
     def on_oversold_enter(self, event):
         """鼠标进入oversold菜单项时的处理"""
@@ -224,7 +232,7 @@ class MainFrame(wx.Frame):
         panel.SetBackgroundColour(wx.Colour(245, 245, 245))
         panel.Refresh()
     
-    def load_csv_content(self, csv_file, indicator_file=None):
+    def load_csv_content(self, csv_file, indicator_file=None, profit_file=None):
         """加载并显示CSV文件内容"""
         try:
             if os.path.exists(csv_file):
@@ -338,7 +346,7 @@ class MainFrame(wx.Frame):
                 grid.EnableEditing(False)
                 
                 # 添加到布局
-                self.stock_list_sizer.Add(grid, 1, wx.EXPAND|wx.ALL, 10)
+                self.stock_list_sizer.Add(grid, 1, wx.EXPAND|wx.ALL, 0)
                 
                 # 更新持股数量指标（统计status为holding的行数）
                 if 'status' in df.columns:
@@ -348,15 +356,17 @@ class MainFrame(wx.Frame):
                 self.holding_count_label.SetLabel(f"持股数量: {holding_count}")
                 
                 # 更新日期胜率指标（读取indicator文件中各种胜率的最后一行）
-                win_rate_1_text = "日期胜率1天: --"
-                win_rate_5_text = "日期胜率5天: --"
-                win_rate_10_text = "日期胜率10天: --"
-                win_rate_20_text = "日期胜率20天: --"
-                win_rate_30_text = "日期胜率30天: --"
+                win_rate_1_text = "1天胜率: --"
+                win_rate_5_text = "5天胜率: --"
+                win_rate_10_text = "10天胜率: --"
+                win_rate_20_text = "20天胜率: --"
+                win_rate_30_text = "30天胜率: --"
                 stock_win_rate_text = "数量胜率: --"
                 omega_text = "Omega指标: --"
                 sharpe_ratio_text = "夏普比率: --"
-                daily_return_text = "当日收益: --"
+                daily_return_text = "今日收益率: --"
+                daily_profit_text = "今日利润: --"
+                total_profit_text = "累计利润: --"
                 
                 if indicator_file and os.path.exists(indicator_file):
                     try:
@@ -364,19 +374,19 @@ class MainFrame(wx.Frame):
                         if len(indicator_df) > 0:
                             if 'win_rate_1' in indicator_df.columns:
                                 last_win_rate_1 = indicator_df['win_rate_1'].iloc[-1]
-                                win_rate_1_text = f"日期胜率1天: {last_win_rate_1:.2f}%"
+                                win_rate_1_text = f"1天胜率: {last_win_rate_1:.2f}%"
                             if 'win_rate_5' in indicator_df.columns:
                                 last_win_rate_5 = indicator_df['win_rate_5'].iloc[-1]
-                                win_rate_5_text = f"日期胜率5天: {last_win_rate_5:.2f}%"
+                                win_rate_5_text = f"5天胜率: {last_win_rate_5:.2f}%"
                             if 'win_rate_10' in indicator_df.columns:
                                 last_win_rate_10 = indicator_df['win_rate_10'].iloc[-1]
-                                win_rate_10_text = f"日期胜率10天: {last_win_rate_10:.2f}%"
+                                win_rate_10_text = f"10天胜率: {last_win_rate_10:.2f}%"
                             if 'win_rate_20' in indicator_df.columns:
                                 last_win_rate_20 = indicator_df['win_rate_20'].iloc[-1]
-                                win_rate_20_text = f"日期胜率20天: {last_win_rate_20:.2f}%"
+                                win_rate_20_text = f"20天胜率: {last_win_rate_20:.2f}%"
                             if 'win_rate_30' in indicator_df.columns:
                                 last_win_rate_30 = indicator_df['win_rate_30'].iloc[-1]
-                                win_rate_30_text = f"日期胜率30天: {last_win_rate_30:.2f}%"
+                                win_rate_30_text = f"30天胜率: {last_win_rate_30:.2f}%"
                             if 'win_rate_stocks' in indicator_df.columns:
                                 last_stock_win_rate = indicator_df['win_rate_stocks'].iloc[-1]
                                 stock_win_rate_text = f"数量胜率: {last_stock_win_rate:.2f}%"
@@ -385,7 +395,8 @@ class MainFrame(wx.Frame):
                                 omega_text = f"Omega指标: {last_omega_ratio:.4f}"
                             if 'return_ratio' in indicator_df.columns:
                                 last_return_ratio = indicator_df['return_ratio'].iloc[-1]
-                                daily_return_text = f"当日收益: {last_return_ratio * 100:.2f}%"
+                                # 这里暂时保留原来的计算，实际的今日收益率将在后面重新计算
+                                daily_return_text = f"今日收益率: {last_return_ratio * 100:.2f}%"
                                 
                             # 计算夏普比率
                             try:
@@ -404,6 +415,42 @@ class MainFrame(wx.Frame):
                     except Exception as e:
                         print(f"读取指标文件出错: {e}")
                 
+                # 读取今日利润和累计利润，并计算今日收益率
+                if profit_file and os.path.exists(profit_file):
+                    try:
+                        profit_df = pd.read_csv(profit_file)
+                        if len(profit_df) > 0 and 'delta' in profit_df.columns:
+                            last_delta = profit_df['delta'].iloc[-1]
+                            daily_profit_text = f"今日利润: {last_delta:.2f}"
+                            
+                            # 计算今日收益率：分子为delta列最后一行，分母为持仓总市值
+                            # 持仓总市值 = holding_list中status为holding的 price_now * amount 之和
+                            total_market_value = 0
+                            if 'status' in df.columns and 'price_now' in df.columns and 'amount' in df.columns:
+                                holding_df = df[df['status'].str.lower() == 'holding']
+                                if len(holding_df) > 0:
+                                    # 计算持仓总市值
+                                    for _, row in holding_df.iterrows():
+                                        if pd.notna(row['price_now']) and pd.notna(row['amount']):
+                                            total_market_value += float(row['price_now']) * float(row['amount'])
+                            
+                            # 计算今日收益率
+                            if total_market_value > 0:
+                                daily_return_rate = (last_delta / total_market_value) * 100
+                                daily_return_text = f"今日收益率: {daily_return_rate:.2f}%"
+                            else:
+                                daily_return_text = "今日收益率: --"
+                                
+                        # 读取累计利润（读取profit文件中profit列的最后一行）
+                        if len(profit_df) > 0 and 'profit' in profit_df.columns:
+                            last_profit = profit_df['profit'].iloc[-1]
+                            total_profit_text = f"累计利润: {last_profit:.2f}"
+                    except Exception as profit_e:
+                        print(f"读取利润文件出错: {profit_e}")
+                        daily_profit_text = "今日利润: --"
+                        daily_return_text = "今日收益率: --"
+                        total_profit_text = "累计利润: --"
+                
                 self.win_rate_1_label.SetLabel(win_rate_1_text)
                 self.win_rate_5_label.SetLabel(win_rate_5_text)
                 self.win_rate_10_label.SetLabel(win_rate_10_text)
@@ -413,6 +460,8 @@ class MainFrame(wx.Frame):
                 self.omega_label.SetLabel(omega_text)
                 self.sharpe_ratio_label.SetLabel(sharpe_ratio_text)
                 self.daily_return_label.SetLabel(daily_return_text)
+                self.daily_profit_label.SetLabel(daily_profit_text)
+                self.total_profit_label.SetLabel(total_profit_text)
                 
                 # 刷新布局
                 self.stock_list_panel.Layout()
@@ -426,19 +475,23 @@ class MainFrame(wx.Frame):
                 # 重置持股数量为0
                 self.holding_count_label.SetLabel("持股数量: 0")
                 # 重置所有日期胜率
-                self.win_rate_1_label.SetLabel("日期胜率1天: --")
-                self.win_rate_5_label.SetLabel("日期胜率5天: --")
-                self.win_rate_10_label.SetLabel("日期胜率10天: --")
-                self.win_rate_20_label.SetLabel("日期胜率20天: --")
-                self.win_rate_30_label.SetLabel("日期胜率30天: --")
+                self.win_rate_1_label.SetLabel("1天胜率: --")
+                self.win_rate_5_label.SetLabel("5天胜率: --")
+                self.win_rate_10_label.SetLabel("10天胜率: --")
+                self.win_rate_20_label.SetLabel("20天胜率: --")
+                self.win_rate_30_label.SetLabel("30天胜率: --")
                 # 重置数量胜率
                 self.stock_win_rate_label.SetLabel("数量胜率: --")
                 # 重置Omega指标
                 self.omega_label.SetLabel("Omega指标: --")
                 # 重置夏普比率
                 self.sharpe_ratio_label.SetLabel("夏普比率: --")
-                # 重置当日收益
-                self.daily_return_label.SetLabel("当日收益: --")
+                # 重置今日收益率
+                self.daily_return_label.SetLabel("今日收益率: --")
+                # 重置今日利润
+                self.daily_profit_label.SetLabel("今日利润: --")
+                # 重置累计利润
+                self.total_profit_label.SetLabel("累计利润: --")
                 
                 self.stock_list_panel.Layout()
         except Exception as e:
@@ -451,36 +504,40 @@ class MainFrame(wx.Frame):
             # 重置持股数量为0
             self.holding_count_label.SetLabel("持股数量: 0")
             # 重置所有日期胜率
-            self.win_rate_1_label.SetLabel("日期胜率1天: --")
-            self.win_rate_5_label.SetLabel("日期胜率5天: --")
-            self.win_rate_10_label.SetLabel("日期胜率10天: --")
-            self.win_rate_20_label.SetLabel("日期胜率20天: --")
-            self.win_rate_30_label.SetLabel("日期胜率30天: --")
+            self.win_rate_1_label.SetLabel("1天胜率: --")
+            self.win_rate_5_label.SetLabel("5天胜率: --")
+            self.win_rate_10_label.SetLabel("10天胜率: --")
+            self.win_rate_20_label.SetLabel("20天胜率: --")
+            self.win_rate_30_label.SetLabel("30天胜率: --")
             # 重置数量胜率
             self.stock_win_rate_label.SetLabel("数量胜率: --")
             # 重置Omega指标
             self.omega_label.SetLabel("Omega指标: --")
             # 重置夏普比率
             self.sharpe_ratio_label.SetLabel("夏普比率: --")
-            # 重置当日收益
-            self.daily_return_label.SetLabel("当日收益: --")
+            # 重置今日收益率
+            self.daily_return_label.SetLabel("今日收益率: --")
+            # 重置今日利润
+            self.daily_profit_label.SetLabel("今日利润: --")
+            # 重置累计利润
+            self.total_profit_label.SetLabel("累计利润: --")
             
             self.stock_list_panel.Layout()
     
     def on_oversold_click(self, event):
         """点击oversold策略菜单项时的处理"""
         self.SetTitle("股票清单和策略指标 - Oversold 策略")
-        self.load_csv_content(oversold_hd_csv, oversold_indicator_csv)
+        self.load_csv_content(oversold_hd_csv, oversold_indicator_csv, oversold_profit_csv)
     
     def on_downgap45_click(self, event):
         """点击downgap45策略菜单项时的处理"""
         self.SetTitle("股票清单和策略指标 - Downgap >>> 45策略")
-        self.load_csv_content(downgap_hd_csv_45, downgap_indicator_csv_45)
+        self.load_csv_content(downgap_hd_csv_45, downgap_indicator_csv_45, downgap_profit_csv_45)
     
     def on_downgap50_click(self, event):
         """点击downgap50策略菜单项时的处理"""
         self.SetTitle("股票清单和策略指标 - Downgap >>> 50策略")
-        self.load_csv_content(downgap_hd_csv_50, downgap_indicator_csv_50)
+        self.load_csv_content(downgap_hd_csv_50, downgap_indicator_csv_50, downgap_profit_csv_50)
 
 class StockApp(wx.App):
     def OnInit(self):

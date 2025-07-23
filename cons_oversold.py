@@ -12,13 +12,13 @@ COST_FEE = 0.0005  # 交易费用和佣金比例
 MAX_STOCKS = 60  # 最大持仓股票数
 ONE_TIME_FUNDS = 60000  # 单次买入资金
 MIN_STOCK_PRICE = 2.88 # 最低股票买入价格，低于此价格不买入
-MAX_DOWN_LIMIT = -0.40 # 最大下跌幅度，超过此值要卖出
+MAX_DOWN_LIMIT = -0.20 # 最大下跌幅度，超过此值要卖出
 PAUSE = 0.5  # 暂停时间
 initial_funds = 3.6e6  # 初始资金360万
 exception_list = ['退市', '退', 'PT', 'ST']  # 例外股票列表,不列入买入清单
 
 # files
-from cons_general import TRADE_DIR, BACKUP_DIR
+from cons_general import TRADE_DIR
 BUY_IN_LIST = f'{TRADE_DIR}/oversold/buy_in_list.csv'  # 买入清单
 HOLDING_LIST = f'{TRADE_DIR}/oversold/holding_list.csv'  # 持仓清单
 DAILY_PROFIT = f'{TRADE_DIR}/oversold/daily_profit.csv'  # 每日盈亏
