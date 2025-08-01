@@ -12,7 +12,7 @@ dataset_group_cons = {
         'TEST_DATASET_PERCENT': 0.20,  # 测试集占训练集的比例
         'TRADE_COVERAGE_DAYS': 30,  # 即买入清单中记录的保留天数，即买入观察天数(不含今日)，影响交易集的长度
         'MIN_PRED_RATE': 0.15,  # 预期收益率下限，用于筛选交易数据集，低于此收益率的数据集不列入交易清单
-        'PRED_RATE_PCT': 0.9,  # 预期收益率折扣百分比
+        'PRED_RATE_PCT': 0.95,  # 预期收益率折扣百分比
         'SHUFFLE': False,  # 是否打乱测试集
         'MAX_STOCKS': 60,  # 最大持仓股票数
         'ONE_TIME_FUNDS': 60000,  # 单次买入资金

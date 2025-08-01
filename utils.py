@@ -160,54 +160,6 @@ def get_history_realtime_price_DF_from_xueqiu(code, datalen=10) -> pd.DataFrame:
         print(f'获取雪球数据失败:{response.status_code},请检查 token 设置、网络连接或是否为交易日')
     return res_df
 
-def get_XD_XR_DR_qfq_price_DF(src_data: pd.DataFrame) -> pd.DataFrame:
-    """
-    计算除权除息后的价格序列(前复权),并对change、pct_chg字段重新计算.
-    :param src_data: basicdata/dailydata下日行情数据(按trade_date升序排列)
-    :return: src_data(open、high、low、close、pre_close)除权除息前的价格序列(按trade_date升序排列)
-    NOTE: 
-    xr_price = (pre_price - cash_divdend_per_stock) / (1 + div_per_stock)
-    div_per_stock: 每股转送股数
-    cash_dividend_per_stock: 每股派息税前金额
-    如有多次除权除息,按实施时间顺序从前到后依次计算(前复权)
-    XD:除息 XR:转送股除权 DR:除息及除权, 未考虑配股除权
-    NOTE:
-    暂停使用, 直接使用get_qfq_price_DF_by_adj_factor计算前复权价格
-    """
-    src_data_cp = src_data.copy()
-    src_data_cp = src_data_cp.sort_values(by='trade_date', ascending=True)  # 升序排列
-    src_data_cp.reset_index(drop=True, inplace=True)  # 重置索引
-    ts_code = src_data_cp['ts_code'].iloc[0]
-    dividend_csv = f'{FINANDATA_DIR}/dividend/{ts_code}.csv'
-    if not os.path.exists(dividend_csv):
-        return src_data_cp
-    dividend_df = pd.read_csv(dividend_csv, dtype={'ex_date': str})
-    if dividend_df.empty:
-        return src_data_cp
-    columns = ['ts_code', 'name', 'industry', 'stk_div', 'cash_div_tax', 'ex_date']
-    dividend_df = dividend_df[columns]
-    dividend_df = dividend_df.dropna(subset=['ex_date'])
-    dividend_df = dividend_df.sort_values(by='ex_date', ascending=True)  # 升序排列
-    dividend_df.reset_index(drop=True, inplace=True)  # 重置索引
-    # 遍历dividend_df，如果ex_date在scr_data_cp的trade_date中，
-    # 计算除权除息后价格(from ex_date to src_data_cp's last trade_date)
-    for _, row in dividend_df.iterrows():
-        ex_date = row['ex_date']
-        if ex_date not in src_data_cp['trade_date'].values:
-            continue
-        div_per_stock = row['stk_div'] if pd.notna(row['stk_div']) else 0
-        cash_dividend_per_stock = row['cash_div_tax'] if pd.notna(row['cash_div_tax']) else 0
-        idx = src_data_cp[src_data_cp['trade_date'] == ex_date].index[0]
-        src_data_cp.loc[:idx-1, ['open', 'high', 'low']] = \
-            (src_data_cp.loc[:idx-1, ['open', 'high', 'low']] - cash_dividend_per_stock) / (1 + div_per_stock)
-        src_data_cp.loc[:idx-1, ['close', 'pre_close']] = \
-            (src_data_cp.loc[:idx-1, ['close', 'pre_close']] - cash_dividend_per_stock) / (1 + div_per_stock)
-        src_data_cp.loc[:idx-1, 'change'] = \
-            src_data_cp.loc[:idx-1, 'close'] - src_data_cp.loc[:idx-1, 'pre_close']
-        src_data_cp.loc[:idx-1, 'pct_chg'] = \
-            src_data_cp.loc[:idx-1, 'change'] / src_data_cp.loc[:idx-1, 'pre_close']
-    return src_data_cp
-
 def get_qfq_price_DF_by_adj_factor(src_data: pd.DataFrame) -> pd.DataFrame:
     """
     通过复权因子计算前复权价格序列

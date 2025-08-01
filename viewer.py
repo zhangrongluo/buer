@@ -24,13 +24,23 @@ class MainFrame(wx.Frame):
         # 创建布局
         self.create_layout()
         
+        # 创建定时器，每5秒刷新一次指标
+        self.timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.on_timer_refresh, self.timer)
+        self.timer.Start(5000)  # 5秒间隔
+        
+        # 记录当前加载的文件路径，用于定时刷新
+        self.current_csv_file = None
+        self.current_indicator_file = None
+        self.current_profit_file = None
+        
         # 居中显示
         self.Center()
     
     def get_initial_size(self):
-        """获取初始窗口大小(屏幕的75%)"""
+        """获取初始窗口大小(屏幕的宽90%, 高75%)"""
         display_size = wx.GetDisplaySize()
-        width = int(display_size.width * 0.75)
+        width = int(display_size.width * 0.90)
         height = int(display_size.height * 0.75)
         return (width, height)
     
@@ -183,6 +193,15 @@ class MainFrame(wx.Frame):
         
         # 初始化完成后预先加载oversold策略内容
         self.load_csv_content(oversold_hd_csv, oversold_indicator_csv, oversold_profit_csv)
+        
+        # 绑定窗口关闭事件
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+    
+    def on_close(self, event):
+        """窗口关闭时停止定时器"""
+        if hasattr(self, 'timer') and self.timer.IsRunning():
+            self.timer.Stop()
+        event.Skip()  # 继续处理关闭事件
     
     def on_oversold_enter(self, event):
         """鼠标进入oversold菜单项时的处理"""
@@ -234,6 +253,11 @@ class MainFrame(wx.Frame):
     
     def load_csv_content(self, csv_file, indicator_file=None, profit_file=None):
         """加载并显示CSV文件内容"""
+        # 记录当前文件路径，用于定时刷新
+        self.current_csv_file = csv_file
+        self.current_indicator_file = indicator_file
+        self.current_profit_file = profit_file
+        
         try:
             if os.path.exists(csv_file):
                 # 读取CSV文件
@@ -523,6 +547,68 @@ class MainFrame(wx.Frame):
             self.total_profit_label.SetLabel("累计利润: --")
             
             self.stock_list_panel.Layout()
+    
+    def on_timer_refresh(self, event):
+        """定时器触发的刷新函数"""
+        if self.current_csv_file and self.current_indicator_file and self.current_profit_file:
+            self.refresh_specific_indicators()
+    
+    def refresh_specific_indicators(self):
+        """刷新特定指标：今日收益率、今日利润、累计利润"""
+        try:
+            # 读取当前的holding_list数据用于计算今日收益率
+            df = None
+            if os.path.exists(self.current_csv_file):
+                df = pd.read_csv(self.current_csv_file)
+            
+            # 初始化指标文本
+            daily_return_text = "今日收益率: --"
+            daily_profit_text = "今日利润: --"
+            total_profit_text = "累计利润: --"
+            
+            # 读取今日利润和累计利润，并计算今日收益率
+            if os.path.exists(self.current_profit_file):
+                try:
+                    profit_df = pd.read_csv(self.current_profit_file)
+                    if len(profit_df) > 0 and 'delta' in profit_df.columns:
+                        last_delta = profit_df['delta'].iloc[-1]
+                        daily_profit_text = f"今日利润: {last_delta:.2f}"
+                        
+                        # 计算今日收益率：分子为delta列最后一行，分母为持仓总市值
+                        # 持仓总市值 = holding_list中status为holding的 price_now * amount 之和
+                        total_market_value = 0
+                        if df is not None and 'status' in df.columns and 'price_now' in df.columns and 'amount' in df.columns:
+                            holding_df = df[df['status'].str.lower() == 'holding']
+                            if len(holding_df) > 0:
+                                # 计算持仓总市值
+                                for _, row in holding_df.iterrows():
+                                    if pd.notna(row['price_now']) and pd.notna(row['amount']):
+                                        total_market_value += float(row['price_now']) * float(row['amount'])
+                        
+                        # 计算今日收益率
+                        if total_market_value > 0:
+                            daily_return_rate = (last_delta / total_market_value) * 100
+                            daily_return_text = f"今日收益率: {daily_return_rate:.2f}%"
+                        else:
+                            daily_return_text = "今日收益率: --"
+                            
+                    # 读取累计利润（读取profit文件中profit列的最后一行）
+                    if len(profit_df) > 0 and 'profit' in profit_df.columns:
+                        last_profit = profit_df['profit'].iloc[-1]
+                        total_profit_text = f"累计利润: {last_profit:.2f}"
+                except Exception as profit_e:
+                    print(f"定时刷新读取利润文件出错: {profit_e}")
+                    daily_profit_text = "今日利润: --"
+                    daily_return_text = "今日收益率: --"
+                    total_profit_text = "累计利润: --"
+            
+            # 更新指定的指标标签（不包括夏普比率）
+            self.daily_return_label.SetLabel(daily_return_text)
+            self.daily_profit_label.SetLabel(daily_profit_text)
+            self.total_profit_label.SetLabel(total_profit_text)
+            
+        except Exception as e:
+            print(f"定时刷新指标出错: {e}")
     
     def on_oversold_click(self, event):
         """点击oversold策略菜单项时的处理"""
