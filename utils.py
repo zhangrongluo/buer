@@ -458,17 +458,6 @@ def is_trade_date_or_not():
     dates = trade_cal['cal_date'].tolist()
     return today in dates
 
-def is_within_trading_hours():
-    """
-    check if current time is within trading hours
-    """
-    now = datetime.datetime.now().time()
-    time1 = datetime.time(9, 30)  # 上午 9:30
-    time2 = datetime.time(11, 30)  # 上午 11:00
-    time3 = datetime.time(13, 0)  # 下午 13:00
-    time4 = datetime.time(15, 0)    # 下午 15:00
-    return (time1 <= now <= time2) or (time3 <= now <= time4)
-
 def is_suspended_or_not(code: str) -> bool:
     """
     check if stock is suspended

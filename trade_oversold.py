@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import datetime
 import logging
+from typing import Literal
 from threading import Lock
 from stocklist import get_name_and_industry_by_code
 from concurrent.futures import ThreadPoolExecutor
@@ -302,14 +303,6 @@ def scan_buy_in_list():
         return price_max
 
     def scan_buy_in_list_row(idx_row):
-        # if not in trading time 9:35-11:30, 13:00-14:55, skip
-        now = datetime.datetime.now().time()
-        am_begin = datetime.time(9, 35)
-        am_end = datetime.time(11, 30)
-        pm_begin = datetime.time(13, 0)
-        pm_end = datetime.time(14, 55)
-        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
-            return
         i, row = idx_row
         code = row['ts_code']
         name = row['stock_name']
@@ -466,14 +459,6 @@ def scan_holding_list():
         holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
     
     def scan_holding_list_row(idx_row):
-        # if not in trading time 9:35-11:30, 13:00-14:55, skip
-        now = datetime.datetime.now().time()
-        am_begin = datetime.time(9, 35)
-        am_end = datetime.time(11, 30)
-        pm_begin = datetime.time(13, 0)
-        pm_end = datetime.time(14, 55)
-        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
-            return
         i, row = idx_row
         if row['date_out'] != '':
             return
@@ -753,13 +738,41 @@ def XD_holding_list():
     # print(f'({MODEL_NAME}) 持有清单前复权和股数调整完成, 正在刷新列表...')
     # refresh_holding_list()
 
-def trade_process():
+def trade_process(mode: Literal['trade', 'test'] = 'trade'):
     """
-    trade period: buy_in sell_out refresh and backup
+    trade logic process
+    :param mode: trade or test, default is trade
+    :return: None
     NOTE: 
-    buy_in_list.csv -> holding_list.csv -> daily_profit.csv
+    - 'trade' 模式下, 在实际交易时间内执行交易逻辑。
+    - 'test' 模式下, 在非交易时间执行交易逻辑, 主要为了检测交易逻辑是否正确。
     """
-    refresh_holding_list()
-    scan_buy_in_list()
-    scan_holding_list()
-    create_daily_profit_list()
+    
+    def is_within_trading_hours():
+        now = datetime.datetime.now().time()
+        am_begin = datetime.time(9, 30)
+        am_end = datetime.time(11, 30)
+        pm_begin = datetime.time(13, 0)
+        pm_end = datetime.time(15, 0)
+        return (am_begin <= now <= am_end or pm_begin <= now <= pm_end)
+
+    def one_trade_loop():
+        refresh_holding_list()
+        scan_buy_in_list()
+        scan_holding_list()
+        create_daily_profit_list()
+
+    if mode == 'trade' and is_within_trading_hours():
+        # 在实际交易时间内执行交易逻辑
+        one_trade_loop()
+    if mode == 'test' and not is_within_trading_hours():
+        # 在非交易时间执行交易逻辑
+        import shutil
+        shutil.copytree(trade_dir, f'{trade_dir}_test_copy', dirs_exist_ok=True)
+        one_trade_loop()
+    if mode not in ['trade', 'test']:
+        print(f'Invalid mode: {mode}. Use "trade" or "test".')
+        return
+
+if __name__ == '__main__':
+    trade_process(mode='test')  # or mode='trade' for actual trading

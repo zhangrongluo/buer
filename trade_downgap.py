@@ -3,9 +3,10 @@ import re
 import pandas as pd
 import datetime
 import logging
+from typing import Literal
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
-from cons_general import DATASETS_DIR, BASICDATA_DIR
+from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR
 from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not,
@@ -398,14 +399,6 @@ def scan_buy_in_list(max_trade_days:int):
             return None
 
     def scan_buy_in_list_row(idx_row):
-        # if not in trading time 9:35-11:30, 13:00-14:55, skip
-        now = datetime.datetime.now().time()
-        am_begin = datetime.time(9, 35)
-        am_end = datetime.time(11, 30)
-        pm_begin = datetime.time(13, 0)
-        pm_end = datetime.time(14, 55)
-        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
-            return
         i, row = idx_row
         code = row['ts_code']
         name = row['stock_name']
@@ -613,14 +606,6 @@ def scan_holding_list(max_trade_days: int):
         holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
     
     def scan_holding_list_row(idx_row):
-        # if not in trading time 9:35-11:30, 13:00-14:55, skip
-        now = datetime.datetime.now().time()
-        am_begin = datetime.time(9, 35)
-        am_end = datetime.time(11, 30)
-        pm_begin = datetime.time(13, 0)
-        pm_end = datetime.time(14, 55)
-        if not (am_begin <= now <= am_end or pm_begin <= now <= pm_end):
-            return
         i, row = idx_row
         ts_code = row['ts_code']
         stock_name = row['stock_name']
@@ -841,12 +826,39 @@ def XD_holding_list(max_trade_days: int):
         holding_df.to_csv(HOLDING_LIST, index=False)
     # refresh_holding_list(max_trade_days=max_trade_days)
 
-def trade_process(max_trade_days: int):
+def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade'):
     """
-    trade period: buy_in sell_out refresh and backup
+    trade logic process
     :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
+    :param mode: 'trade' or 'test'
+    NOTE:
+    - 'trade' 模式下, 在实际交易时间内执行交易逻辑。
+    - 'test' 模式下, 在非交易时间执行交易逻辑, 主要为了检测交易逻辑是否正确。
     """
-    refresh_holding_list(max_trade_days=max_trade_days)
-    scan_buy_in_list(max_trade_days=max_trade_days)
-    scan_holding_list(max_trade_days=max_trade_days)
-    create_daily_profit_list(max_trade_days=max_trade_days)
+    def is_within_trading_hours():
+        now = datetime.datetime.now().time()
+        am_begin = datetime.time(9, 30)
+        am_end = datetime.time(11, 30)
+        pm_begin = datetime.time(13, 0)
+        pm_end = datetime.time(15, 0)
+        return (am_begin <= now <= am_end or pm_begin <= now <= pm_end)
+    
+    def one_trade_loop(max_trade_days: int):
+        refresh_holding_list(max_trade_days=max_trade_days)
+        scan_buy_in_list(max_trade_days=max_trade_days)
+        scan_holding_list(max_trade_days=max_trade_days)
+        create_daily_profit_list(max_trade_days=max_trade_days)
+
+    if mode == 'trade' and is_within_trading_hours():
+        one_trade_loop(max_trade_days=max_trade_days)
+    if mode == 'test' and not is_within_trading_hours():
+        import shutil
+        trade_dir = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
+        shutil.copytree(trade_dir, f'{trade_dir}_test_copy', dirs_exist_ok=True)  # 备份交易数据
+        one_trade_loop(max_trade_days=max_trade_days)
+    if mode not in ['trade', 'test']:
+        print(f'Invalid mode: {mode}. Use "trade" or "test".')
+        return
+
+if __name__ == '__main__':
+    trade_process(max_trade_days=45, mode='test')
