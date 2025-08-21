@@ -1,18 +1,24 @@
-#### 注意事项
-##### 每日需要定期更新数据，以获取最新的OverSold数据集：
-- 更新TRADE_RECORD_PATH目录下的全部股票交易记录，里面保存了沪深300行业中股票的每日的财务指标信息。更新后需要调用get_trade_date_equal_today_nums接口检查数据更新情况。
-- 更新dailydata_root目录下全部文件数据，里面保存了沪深300行业中股票每日的交易价格信息，含open、high、low、close、pre_close、chg_pct、vol等，交易信息更新后需要调用get_daily_data_equal_today_nums接口检查数据更新情况。
-- 以上两项基础数据更新已经打包在dataset项目中，运行dataset项目下的Roe_data.ipynb文件即可完成数据更新。
-- 运行本项目下dataset.ipynb文件，完成OverSold数据集的创建和更新。
-- 有时会缺少财务记录文件，从而导致合并数据集报错。需要到quant-stock项目下data.py或者dataset项目下Roe_data.ipynb中运行check_stockcodes_integrity检查记录完整性。
-#### 参数说明（cons.py）:
-##### OverSold模型由以下参数来控制：
-- FORWARD_DAYS和DOWN_FILTER：基准日向前交易日的天数（包含基准日）。模型计算该天数内的最大跌幅（最高值和基准日收盘价比较），如果小于DOWN_FILTER，则该数据列入OverSold数据集。该参数是以交易日历天数（非自然日历天数）来计算的。
-- BACKWARD_DAYS：基准日向后交易日的天数（不包含基准日）。模型计算该天数内的最大涨幅（最高值和基准日收盘价比较），该涨幅是数据集的标签值。该参数是以交易日历天数（非自然日历天数）来计算的。该参数决定了交易集的大小。交易集确定后，剩余部分列入训练集、验证集和测试集。
-- MAX_TRADE_DAYS：最大交易天数，它和BACKWARD_DAYS是同一个数据。该参数是以交易日历天数（非自然日历天数）来计算的。
-- MIN_WAITING_DAYS：最小等待天数，一般以BACKWARD_DAYS的10%取整来确定。当buy_in_list.csv文件中的某股票全部下跌趋势数据最后一个数据（按trade_date排序）的waiting_days小于该参数时，推断下跌趋势没有结束，不可买入。该参数是以交易日历天数（非自然日历天数）来计算的。
-- WAITING_RATE_PCT：等待期间内最大上涨幅度/预期收益率的比例，如果等待期内的最大上涨幅度大于该参数，则不买入。
-- REST_TRADE_DAYS：剩余交易天数。在股票进入了holding_list.csv后，该参数决定了股票剩余的持有天数（等于MAX_TRADE_DAYS - waiting_days）。该参数是以交易日历天数（非自然日历天数）来计算的。waiting_days指一个下跌趋推断势终止后，基准日至今天已经发生的交易天数，即在holding_list.csv中，days列的值。
+### ==OverSold 系统（超跌反弹）==
+
+> #### 超跌反弹定义、数据集构建和刷新
+- **OverSold** 系统投资于超跌反弹类型的投资机会，本系统定义的超跌趋势由以下参数来确定：**trade_date，forward_days, backward_days 和 down_filter**。
+- 设定某日为基准日 trade_date, forward_days即为基准日向前的时间跨度（含基准日），backward_days为基准日向后的时间跨度（不含基准日），down_filter 为下跌幅度筛选阈值。
+- 在forward_days内取最高价,如果该价格和 trade_date 的收盘价比较,跌幅超过 down_filter, **OverSold** 系统将最高价日期和基准日确认为一个超跌趋势。
+- 在此基础上，系统判断 trade_date 日后是否有足够的交易天数覆盖backward_days。如果可以覆盖，则选取backward_days天数内的最高价，记录 trade_date 的收盘价和该最高价之间的最大涨幅及最高价日期。如果无法覆盖，则略过该步骤。
+- **OverSold** 系统将forward_days下跌阶段和backward_days上涨阶段合并成一条超跌反弹数据，保存在该股票的超跌反弹数据集中。
+- 在每个交易日，**OverSold** 系统扫描交易日无法覆盖backward_days的数据记录，检查当日是否满足覆盖backward_days的条件。如果可以覆盖，则补充计算该条数据在backward_days期间的最大涨幅、最高价日期等数据，并刷新该股票的超跌反弹数据集。
+- ==**特别说明：一个超跌趋势往往会产生多条数据记录，这些数据记录在forward_days期间内最高价通常是同一天。这种情况其实就是一个下跌趋势的持续过程，该趋势在某一天产生了一个最高价，在后续交易日内连续下跌（跌幅超过 down_filter的计入数据集），直到下跌趋势结束或者超出了forward_days的覆盖天数。**==
+- **当一个超跌趋势形成以后，其多条数据记录的基准日会顺延（连续或者不连续），直到该下跌趋势结束。OverSold系统会以最后一条数据记录的基准日为起点，选择一个较小的时间跨度天数作为等待天数waiting_days，以观察该下跌趋势是否已经结束（不会再产生新的超跌数据记录）。如果产生了新的超跌数据记录，则以新产生的数据记录为最后一条重新等待。**
+- **OverSold** 系统的交易只能发生在backward_days天数内，如果在backward_days实现了模型推理的预期涨幅，则在实现当日卖出，如果在backward_days天数内没有实现预期涨幅，则在backward_days天数满后即强制卖出。所以一条超跌反弹数据记录，如果backward_days天数内相应的指标和数据已经填列（即非空），则该条记录已经完成了交易，只能作为训练集或者测试集。只有基准日后交易天数不能覆盖backward_days的交易记录才有可能作为交易集。
+
+> #### 参数说明（cons_oversold.py）:
+##### OverSold系统参数说明：
+- FORWARD_DAYS和DOWN_FILTER：基准日向前交易日的天数（包含基准日）。系统计算该天数内的最大跌幅$$基准日收盘价/FORWARD\_DAYS内最高价-1，$$如果该跌幅小于DOWN_FILTER，则该数据列入该股票的超跌反弹数据集。该参数是以交易日历天数（非自然日历天数）来计算的。
+- BACKWARD_DAYS：基准日向后交易日的天数（不包含基准日）。系统计算该天数内的最大涨幅$$BACKWARD\_DAYS内最高价/基准日收盘价-1,$$该涨幅是股票超跌反弹数据集的标签值。该参数是以交易日历天数（非自然日历天数）来计算的。该参数决定了交易集的大小（**基准日后交易天数不能覆盖 backward_days的所有超跌数据记录即为交易集**）。交易集确定后，剩余部分列入训练集、验证集和测试集。
+- MAX_TRADE_DAYS：最大交易天数，即交易记录的BACKWARD_DAYS。该参数是以交易日历天数（非自然日历天数）来计算的。
+- MIN_WAITING_DAYS：最小等待天数。当buy_in_list.csv文件中的某股票全部下跌趋势数据最后一条数据记录（按trade_date排序）的waiting_days小于该参数时，推断下跌趋势没有结束，不可买入。该参数是以交易日历天数（非自然日历天数）来计算的。
+- WAITING_RATE_PCT：等待买入期间内最大上涨幅度/预期收益率的比例，如果等待买入期内的最大上涨幅度大于该参数，则不买入。
+- REST_TRADE_DAYS：剩余交易天数（**等于MAX_TRADE_DAYS - waiting_days**），即买入后最大的持有天数。在股票进入了holding_list.csv后，该参数决定了股票剩余的持有天数。该参数是以交易日历天数（非自然日历天数）来计算的。waiting_days指一个下跌趋推断势终止后，基准日至今天已经发生的交易天数，即在holding_list.csv中，days列的值。
 - TEST_DATASET_PERCENT：测试数据集占训练数据集+验证集+测试集的比例。
 - MIN_PRED_RATE：最低预期收益率。该参数决定了buy_in_list.csv的大小。只用当trade_pred_suffix.csv文件中下跌趋势的预期收益率大于该参数时，才能入选buy_in_list.csv文件。
 - PRED_RATE_PCT：预期收益率折扣百分比。该参数和MIN_PRED_RATE一起可以影响卖出的价格(该参数在本系统无实际意义)。
@@ -29,27 +35,31 @@
 - params_list：该字典参数控制了不同数据集的参数设置和下载更新设置，前三个参数（FORWARD_DAYS、BACKWARD_DAYS和DOWN_FILTER）决定数据集的特征，第四个参数（TO_UPDATE）决定是否创建和更新该数据集。
 - dataset_to_train：该字典参数控制了训练数据的选择设置，前三个参数（FORWARD_DAYS、BACKWARD_DAYS和DOWN_FILTER）决定选择数据集的特征，第四个参数(TIMES)决定是否训练该数据集或者训练的次数。
 - dataset_to_predict_trade：该字典参数控制了交易数据的选择设置，前三个参数（FORWARD_DAYS、BACKWARD_DAYS和DOWN_FILTER）决定数据集的特征，第四个参数(PRED_MODELS)决定是否推测测试集和交易集或则使用多少模型来推测。
-#### 风险来源
-##### OverSold 模型风险可能来自于方方面面
+> #### 风险来源
+##### OverSold 系统风险可能来自于以下方面
 - 模型失效。模型在训练集和测试集上较好拟合，在交易集上拟合无效。
 - 数据集风险。训练集、验证集、测试集和交易集采用了不同的选择标准，比如交易集使用了排除列表筛选，而训练集、测试集未使用排除列表筛选。
 - 执行风险。即在模型发出买入卖出信号后，实际操作和模型存在差异。
 - 股票实时价格获取速度。如果股票实时价格获取速度太慢，可能会丧失交易机会。
 - 研究不够深入，未能发现下跌趋势行为模式的变化。
 - 代码错误。这种风险无处不在，防不胜防。如前次把time.sleep()写成了time.slee(),由于在线程池中运行，没有报错，导致卖出模块失效，原因难寻。比如yyyymmdd型日期格式的处理，在保存过程中会出现string向float的自主转换，这些小问题，如果关注不到，也会造成大麻烦。今后处理日期型字段，将采用yyyymmdd H:m:s格式。比如np.nan、None的区别，也会造成不少问题。
-- 多线程运行过程中，可能会发生不可预知的错误。
-#### 风险控制
+- 多线程运行过程中，可能会发生无法预知的错误。
+- **OverSold** 系统没有对指标统一数据格式，比如对于涨跌幅数据，有些文件以0.05 表示 5%，有些文件以 5 表示 5%，务必要注意这个问题。
+> #### 风险控制
 ##### OverSold 模型采用以下风险控制措施
-- 通过最大持股个数MAX_STOCKS来控制单个股票最大投资比例。该参数一般要超过80，从而控制单个股票最大持仓比例。
+- 通过最大持股个数MAX_STOCKS来控制单个股票最大投资比例。该参数一般要超过60，从而控制单个股票最大持仓比例。
 - 通过单次买入资金ONE_TIME_FUNDS来控制单次买入的金额。
 - 通过最大持股个数MAX_STOCKS 和 单次买入资金ONE_TIME_FUNDS来控制最大投资金额占可投资金额的比例。
 - 通过exception_list强制排除风险股票:退市股票、st股票、pt股票等。
 - 通过最低买入价格MIN_STOCK_PRICE来回避股价过低的股票。
+- 通过最大下跌幅度来控制单只股票过度下跌。
 - 买入时，跌停不买，处于下跌过程不买。
 - 卖出时，涨停不卖，处于上涨过程不卖。
-#### 几个文件中的指标说明
+- 多线程编程时，采用最佳实践，设置合理的而不是最多的一次线程运行的数目。
+- 等待期内的涨幅如果超过了模型设定涨幅的一定比例（系统设定值），系统不会买入该股票。
+> #### 几个文件中的指标说明
 ##### OverSold数据集文件
-- trade_date：下跌趋势的基准日。
+- trade_date：超跌趋势的基准日。
 - max_date_forward：基准日向前FORWARD_DAYS天的最大价格出现的日期。
 - max_down_rate：max_date_forward的最高价至基准日收盘价的最大跌幅。
 - forward_days：max_date_forward和基准日之间的交易天数（包含基准日）。
@@ -62,18 +72,18 @@
 - RSI和K指标：即是股票技术分析中的RSI指标和K指标。
 - turnover_rate：换手率。
 ##### buy_in_list.csv
-- trade_date：下跌趋势的基准日。
+- trade_date：超跌趋势的基准日。
 - buy_point_base：基准日的收盘价。股价小于等于该价格时，才可以买入。
 - pct_chg：基准日当日涨跌幅。
 - max_date_forward：基准日向前FORWARD_DAYS天的最大价格出现的日期。
 - max_down_rate：基准日向前FORWARD_DAYS天的最大跌幅。
 - forward_days：基准日向前FORWARD_DAYS天的交易天数（包含基准日）。
-- waiting_days：该下跌趋趋势基准日到今天的交易天数（不包含基准日），即在honging_list.csv中，days列的值。
+- waiting_days：等待天数，超跌趋势基准日到今天的交易天数（不包含基准日），在honging_list.csv中，等于days列的值。
 - pred：模型预测的收益率，即holding_list.csv中的target_rate,也是max_up_rate的预测值。
 - real: 缺口实际收益率，为空。
 ##### holding_list.csv
-- trade_date：下跌趋势的基准日。
-- days：下跌基准日和今天之间的交易天数，即buy_in_list.csv中的waiting_days列的值。
+- trade_date：超跌趋势的基准日。
+- days：超跌基准日和今天之间的交易天数，即buy_in_list.csv中的waiting_days列的值。
 - holding_days：持有天数，等于今天和买入日期之间的间隔天数，以自然日历为基础计算。
 - buy_point_base：基准日的收盘价。股价小于等于该价格时，才可以买入。
 - target_rate：模型预测收益率，即buy_in_list.csv中的pred，也是max_up_rate的预测值。
@@ -85,3 +95,4 @@
 - rate_pred和rate_pct：即缺口买入时，系统设定的MIN_PRED_RATE和PRED_RATE_PCT值。
 - rate_current：现在的收益率，等于profit / (price_in * amount)
 - rate_yearly：年化收益率，等于rate_current * 365 / holding_days，以自然日历天数计算。
+

@@ -617,6 +617,12 @@ def auto_run():
         id='get_limit_and_suspend_list_and_dividend_task'
     )
     scheduler.add_job(
+        get_up_down_limit_list,
+        trigger='cron',
+        hour=9, minute=28, misfire_grace_time=300,
+        id='get_up_down_limit_list_again'
+    )
+    scheduler.add_job(
         backup_trade_data,
         trigger='cron',
         hour=11, minute=45, misfire_grace_time=300,

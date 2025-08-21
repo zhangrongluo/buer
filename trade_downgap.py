@@ -350,6 +350,8 @@ def scan_buy_in_list(max_trade_days:int):
         当存在多个缺口未买入时,只要买点,则全部缺口一起买入。这比较符合常识。
         """
         gaps_df = buy_in_df[buy_in_df['ts_code'] == code]
+        up_limit_rate = get_up_down_limit(code=code)[2]
+        pct = 0.95
         # 逐行检查是否已买入
         gaps_list = []
         for i, row in gaps_df.iterrows():
@@ -375,7 +377,7 @@ def scan_buy_in_list(max_trade_days:int):
             p2 = target_price2 / (1 + pred2)  # 买点2
             pct_chg2 = gaps_list[1]['pct_chg']
             p_down_limit = target_price2 * 0.9 * 0.9  # 缺口2的跌停价
-            if pct_chg1 <= -0.096 and pct_chg2 <= -0.096:
+            if pct_chg1 <= -up_limit_rate * pct and pct_chg2 <= -up_limit_rate * pct:
                 return min(p1, p2, p_down_limit)  # 买点1,2和缺口2的跌停价最低值
             return min(p1, p2)
         elif len(gaps_list) == 3:
@@ -392,7 +394,7 @@ def scan_buy_in_list(max_trade_days:int):
             p3 = target_price3 / (1 + pred3)  # 买点3
             pct_chg3 = gaps_list[2]['pct_chg']
             p_down_limit = target_price3 * 0.9 * 0.9  # 缺口3的跌停价
-            if pct_chg1 <= -0.096 and pct_chg2 <= -0.096 and pct_chg3 <= -0.096:
+            if pct_chg1 <= -up_limit_rate * pct and pct_chg2 <= -up_limit_rate * pct and pct_chg3 <= -up_limit_rate * pct:
                 return min(p1, p2, p3, p_down_limit)  # 买点1,2,3和缺口3的跌停价最低值
             return min(p1, p2, p3)
         else:  # 3个以上缺口
@@ -437,14 +439,17 @@ def scan_buy_in_list(max_trade_days:int):
                 return
             amount = calculate_buy_in_amount(funds=buy_in_amount/stock_nums, price=price_now)
         else:  # 只有一个缺口
-            pred_rate = (target_price - price_now) / price_now
-            if pred_rate < pred * PRED_RATE_PCT:
+            pred_now = (target_price - price_now) / price_now  # 以现价买入后回补缺口的预期收益率
+            if pred_now < pred * PRED_RATE_PCT:
                 return
             # 当日接近跌停且推断还会继续大跌或者跌停,合理预期会出现第二个较大的缺口,该缺口的买点
             # 会比当前缺口的买点更低,故不能以当前缺口的买点成交。此时采用强制提高收益率的方式
             # （即人为设定更低的买点）阻止交易,等待第二个较大的缺口出现。
-            if pct_chg <= -0.096 and (pred - abs(pct_chg) >= 0.095 or pred >= 0.20):
-                if pred_rate < pred + additionl_rate:
+            up_limit_rate = get_up_down_limit(code=code)[2]
+            pct = 0.95
+            pred_2_down_limit = 1/(1-up_limit_rate*pct)**2 -1  # 连续 2 个跌停后回补的最低收益率
+            if pct_chg <= -up_limit_rate * pct and pred >= pred_2_down_limit:
+                if pred_now < pred + additionl_rate:
                     return
             amount = calculate_buy_in_amount(funds=buy_in_amount, price=price_now)
         if amount == 0:

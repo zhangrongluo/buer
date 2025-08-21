@@ -338,24 +338,26 @@ def get_qfq_price_by_adj_factor(code, pre_price, start: str, end: str = None) ->
         qfq_price = 0.0  # 如果计算结果小于0，则返回0
     return qfq_price
 
-def get_up_down_limit(code: str) -> tuple[float, float]:
+def get_up_down_limit(code: str) -> tuple[float, float, float]:
     """
     获取股票的涨跌停价格
     :param code: 股票代码, 如 000001 或 000001.SZ
-    :return: (涨停价, 跌停价)
+    :return: (涨停价, 跌停价, 涨停幅度)
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
     today = datetime.datetime.now().strftime('%Y%m%d')
     up_down_df = pd.read_excel(UP_DOWN_LIMIT_XLS, dtype={'trade_date': str})
     if up_down_df['trade_date'].iloc[0] != today:
-        return None, None
+        return None, None, None
     res_df = up_down_df[up_down_df['ts_code'] == code]
     if res_df.empty:
-        return None, None
+        return None, None, None
     up_limit = res_df['up_limit'].values[0]
     down_limit = res_df['down_limit'].values[0]
-    return up_limit, down_limit
+    pre_close = (up_limit + down_limit) / 2
+    up_limit_rate = round((up_limit - pre_close) / pre_close, 2)
+    return up_limit, down_limit, up_limit_rate
 
 def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
     """
