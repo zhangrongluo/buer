@@ -646,9 +646,9 @@ def auto_run():
     scheduler.add_job(
         update_and_predict_dataset,
         trigger='cron',
-        hour=17, minute=45, misfire_grace_time=300,
+        hour=17, minute=15, misfire_grace_time=300,
         id='update_predict_dataset',
-        name='每日17:45更新预测数据集'
+        name='每日17:15更新预测数据集'
     )
     scheduler.add_job(
         train_and_predict_model,

@@ -26,3 +26,8 @@ STOCK_LIST_XLS = os.path.join(BASICDATA_DIR, 'common', 'stocklist.xlsx')
 TRADE_CAL_XLS = os.path.join(BASICDATA_DIR, 'common', 'trade_cal.xlsx')
 UP_DOWN_LIMIT_XLS = os.path.join(BASICDATA_DIR, 'common', 'up_down_limit.xlsx')
 SUSPEND_STOCK_XLS = os.path.join(BASICDATA_DIR, 'common', 'suspend_stock_list.xlsx')
+
+# contains all stock's daily data
+DAILY_DATA_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_data_temp.csv')
+DAILY_INDICATOR_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_indicator_temp.csv')
+DAILY_ADJFACTOR_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_adjfactor_temp.csv')

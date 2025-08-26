@@ -12,7 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
-from basic_data import update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data
+from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data,
+                                    download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, download_all_stocks_daily_temp_indicator_data)
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, clear_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
@@ -455,6 +456,8 @@ def update_trade_cal_and_stock_list():
 
 @is_trade_day(task='更新行情和指标数据')
 def update_daily_data_and_indicator():
+    download_all_stocks_daily_temp_data()
+    download_all_stocks_daily_temp_indicator_data()
     update_all_daily_data(step=5)
     update_all_daily_indicator(step=5)
     today = datetime.datetime.now().date().strftime('%Y%m%d')
@@ -489,6 +492,7 @@ def get_limit_and_suspend_list_and_dividend_task():
 @is_trade_day(task='更新复权因子数据')
 def update_adj_data_and_XD_stock_and_trading_am_task():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
+    download_all_stocks_daily_temp_adjfactor_data()
     update_all_adj_factor_data()
     print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
     # 更新复权因子和分红数据后，执行盘中前复权和股数调整
@@ -643,13 +647,13 @@ def auto_run():
     scheduler.add_job(
         update_daily_data_and_indicator,
         trigger='cron',
-        hour=16, minute=30, misfire_grace_time=300,
+        hour=17, minute=5, misfire_grace_time=300,
         id='update_daily_data_and_indicator'
     )
     scheduler.add_job(
         update_and_predict_dataset,
         trigger='cron',
-        hour=18, minute=0, misfire_grace_time=300,
+        hour=17, minute=45, misfire_grace_time=300,
         id='update_and_predict_dataset'
     )
     scheduler.add_job(
