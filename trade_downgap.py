@@ -75,6 +75,7 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: 
             PRED_RATE_PCT = dataset_group_cons[group].get('PRED_RATE_PCT')
             TRADE_LOG = dataset_group_cons[group].get('TRADE_LOG')
             MODEL_NAME = dataset_group_cons[group].get('MODEL_NAME')
+            HOLDING_LIST_ORIGIN = dataset_group_cons[group].get('HOLDING_LIST_ORIGIN')
             break
     trade_log = get_trade_logger(TRADE_LOG)
     if len(code) != 9:
@@ -116,6 +117,14 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: 
     if not res:  # cash balance is not enough
         return
     new_row.to_csv(HOLDING_LIST, mode='a', header=False, index=False)
+    # update origin holding list for xd holding_list
+    origin_columns = ['ts_code', 'stock_name', 'industry', 'trade_date', 'date_in', 'price_in', 'amount', 'target_price']
+    origin_row = [code, stock_name, industry, trade_date, date_in, price_in, amount, target_price]
+    origin_df = pd.DataFrame([origin_row, ], columns=origin_columns)
+    if not os.path.exists(HOLDING_LIST_ORIGIN):
+        origin_df.to_csv(HOLDING_LIST_ORIGIN, mode='w', header=True, index=False)
+    else:
+        origin_df.to_csv(HOLDING_LIST_ORIGIN, mode='a', header=False, index=False)
     now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
     trade_log.info(f'买入 {code} {stock_name} {industry} at {price} total {amount} at {now}')
     os.system(f'afplay /System/Library/Sounds/Ping.aiff')  # play sound to remind buy in
@@ -730,14 +739,15 @@ def XD_buy_in_list(max_trade_days: int):
     xd_record_df = pd.DataFrame([[today, xd_or_not]], columns=['today', 'xd_or_not'])
     xd_record_df.to_csv(XD_RECORD_BUY_IN_CSV, index=False)
 
-def XD_holding_list(max_trade_days: int):
+def XD_holding_list_bak(max_trade_days: int):
     """
     盘中前复权 target_price 和 price_in, 对 amount 进行股数调整
     前复权和股数调整记录在 XD_RECORD_HOLDING_CSV 中
     :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
     NOTE:
     XD_RECORD_CSV contains columns: ts_code, trade_date, pre_trade_date, xd_date, target_price, 
-    price_in, amount, xd_target_price, xd_price_in, xd_amount   
+    price_in, amount, xd_target_price, xd_price_in, xd_amount
+    NOTE: 已弃用   
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -827,6 +837,74 @@ def XD_holding_list(max_trade_days: int):
         xd_df.to_csv(XD_RECORD_HOLDING_CSV, index=False)
     else:
         xd_df.to_csv(XD_RECORD_HOLDING_CSV, mode='a', header=False, index=False)
+    with lock:
+        holding_df.to_csv(HOLDING_LIST, index=False)
+    # refresh_holding_list(max_trade_days=max_trade_days)
+
+def XD_holding_list(max_trade_days: int):
+    """
+    盘中前复权HOLDING_LIST中 target_price 和 price_in, 对 amount 进行股数调整
+    从买入的原始记录 HOLDING_LIST_ORIGIN 中获取数据结合复权因子进行复权
+    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
+    """
+    for group in dataset_group_cons:
+        if str(int(max_trade_days)) in group:
+            HOLDING_LIST = dataset_group_cons[group].get('HOLDING_LIST')
+            HOLDING_LIST_ORIGIN = dataset_group_cons[group].get('HOLDING_LIST_ORIGIN')
+            break
+    if not os.path.exists(HOLDING_LIST):
+        return
+    if not os.path.exists(HOLDING_LIST_ORIGIN):
+        return
+    with lock:
+        holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str, 'date_in': str})
+        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
+        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
+    origin_holding_df = pd.read_csv(HOLDING_LIST_ORIGIN, dtype={'trade_date': str, 'date_in': str})
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    for idx_row in holding_df.iterrows():
+        i, row = idx_row
+        if row['status'] == 'sold_out':
+            continue
+        ts_code = row['ts_code']
+        trade_date = row['trade_date']
+        # 从origin_holding_df中获取date_in target_price price_in 和 amount
+        origin_res_row = origin_holding_df[(origin_holding_df['trade_date'] == trade_date) & (origin_holding_df['ts_code'] == ts_code)]
+        if origin_res_row.empty:
+            continue
+        date_in = origin_res_row.iloc[0]['date_in']
+        target_price = origin_res_row.iloc[0]['target_price']
+        price_in = origin_res_row.iloc[0]['price_in']
+        amount = origin_res_row.iloc[0]['amount']
+        # 获取 trade_date 的前一日(该日最低价即 target_price)
+        adj_csv = f'{BASICDATA_DIR}/adjfactor/{ts_code}.csv'
+        if not os.path.exists(adj_csv):
+            continue
+        adj_df = pd.read_csv(adj_csv, dtype={'trade_date': str})
+        adj_df = adj_df.sort_values(by='trade_date', ascending=True)
+        adj_df = adj_df.reset_index(drop=True)
+        if trade_date not in adj_df['trade_date'].values:
+            continue
+        trade_date_index = adj_df[adj_df['trade_date'] == trade_date].index
+        if trade_date_index.empty:
+            continue
+        trade_date_index = trade_date_index[0]
+        if trade_date_index == 0:
+            continue
+        prev_trade_date = adj_df.iloc[trade_date_index - 1]['trade_date']
+        # 除权
+        xd_target_price = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=target_price, start=prev_trade_date, end=today,
+        )
+        xd_price_in = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=price_in, start=date_in, end=today,
+        )
+        xd_amount = get_XR_adjust_amount_by_dividend_data(
+            code=ts_code, amount=amount, start=date_in, end=today
+        )
+        holding_df.loc[i, 'target_price'] = xd_target_price
+        holding_df.loc[i, 'price_in'] = xd_price_in
+        holding_df.loc[i, 'amount'] = xd_amount
     with lock:
         holding_df.to_csv(HOLDING_LIST, index=False)
     # refresh_holding_list(max_trade_days=max_trade_days)

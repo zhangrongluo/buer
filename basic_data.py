@@ -1,7 +1,9 @@
 """
 download and update daily data and daily indicator data for all stocks
+basic_data_alt_edition已替代本模块。但在一次性需要更新多日数据的情况下,本模块仍然是可用的。
 """
 import os
+import time
 import datetime
 import pandas as pd
 import re
@@ -294,6 +296,45 @@ def download_dividend_data_from_xueqiu(ts_code: str):
         browser.quit()
     except Exception as e:
         print(f'download {ts_code} {msg[0]} dividend data from xueqiu Error: {e}')
+
+def download_dividend_data_in_multi_ways(ts_code: str) -> str | None:
+    """
+    下载分红数据
+    :param ts_code: 股票代码, 如 000001 或 000001.SZ
+    :return: 下载的文件路径(成功)或者 None(失败)
+    NOTE: 
+    如果未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据
+    """
+    if len(ts_code) == 6:
+        ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
+    try:
+        download_dividend_data(ts_code=ts_code)
+        dividend_csv = f'{FINANDATA_DIR}/dividend/{ts_code}.csv'
+        if not os.path.exists(dividend_csv):
+            today = datetime.datetime.now().strftime('%Y%m%d')
+            dividend_csv = f'{FINANDATA_DIR}/sina_dividend/{ts_code}.csv'
+            if os.path.exists(dividend_csv):
+                mtime = os.path.getmtime(dividend_csv)
+                mtime = time.strftime('%Y%m%d', time.localtime(mtime))
+                if mtime != today:
+                    download_dividend_data_from_sina(ts_code=ts_code)
+            else:
+                download_dividend_data_from_sina(ts_code=ts_code)
+            try_xueqiu_again = (os.path.exists(dividend_csv) and \
+                time.strftime('%Y%m%d', time.localtime(os.path.getmtime(dividend_csv))) != today)
+            if not os.path.exists(dividend_csv) or try_xueqiu_again:
+                dividend_csv = f'{FINANDATA_DIR}/xueqiu_dividend/{ts_code}.csv'
+                if os.path.exists(dividend_csv):
+                    mtime = os.path.getmtime(dividend_csv)
+                    mtime = time.strftime('%Y%m%d', time.localtime(mtime))
+                    if mtime != today:
+                        download_dividend_data_from_xueqiu(ts_code=ts_code)
+                else:
+                    download_dividend_data_from_xueqiu(ts_code=ts_code)
+        return dividend_csv
+    except Exception as e:
+        print(f'download {ts_code} dividend data Error: {e}')
+        return None
 
 def download_adj_factor_data(ts_code: str):
     """

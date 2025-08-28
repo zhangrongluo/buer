@@ -27,6 +27,7 @@ dataset_group_cons = {
         'INDICATOR_CSV': os.path.join(trade_root, f'max_trade_days_50', 'statistic_indicator.csv'),
         'XD_RECORD_HOLDING_CSV': os.path.join(trade_root, f'max_trade_days_50', 'xd_record_holding.csv'),
         'XD_RECORD_BUY_IN_CSV': os.path.join(trade_root, f'max_trade_days_50', 'xd_record_buy_in.csv'),
+        'HOLDING_LIST_ORIGIN': os.path.join(trade_root, f'max_trade_days_50', 'holding_list_origin.csv'),
     },
     'group_45': {
         'MODEL_NAME': 'DownGap >>> 45',  # 模型名称
@@ -49,13 +50,14 @@ dataset_group_cons = {
         'INDICATOR_CSV': os.path.join(trade_root, f'max_trade_days_45', 'statistic_indicator.csv'),
         'XD_RECORD_HOLDING_CSV': os.path.join(trade_root, f'max_trade_days_45', 'xd_record_holding.csv'),
         'XD_RECORD_BUY_IN_CSV': os.path.join(trade_root, f'max_trade_days_45', 'xd_record_buy_in.csv'),
+        'HOLDING_LIST_ORIGIN': os.path.join(trade_root, f'max_trade_days_45', 'holding_list_origin.csv'),
     },
     'common':{
         'COST_FEE': 0.0006,
         'MIN_STOCK_PRICE': 2.88,
         'PAUSE': 0.5,
         'additionl_rate': 0.02,
-        'exception_list': ['退市', '退', 'PT', 'ST'],
+        'exception_list': ['退市', '退', 'PT', 'ST', '聚灿光电'],
         'MAX_TRADE_DAYS_LIST': [50, 45],  # 最大交易天数列表    
     }
 }

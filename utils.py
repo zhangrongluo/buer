@@ -7,6 +7,7 @@ import requests
 import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
+from basic_data_alt_edition import download_dividend_data_in_multi_ways
 from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_XLS, TEMP_DIR
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
@@ -126,6 +127,8 @@ def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=10) -> pd.Dat
         res_df[['low', 'close']] = res_df[['low', 'close']].apply(pd.to_numeric, errors='coerce')
         res_df = res_df[['day', 'open', 'high', 'low', 'close']]
         res_df = res_df.reset_index(drop=True)
+    else:
+        print(f'获取新浪数据失败:{response.status_code},请检查 token 设置、网络连接或是否为交易日')
     return res_df
 
 def get_history_realtime_price_DF_from_xueqiu(code, datalen=10) -> pd.DataFrame:
@@ -200,26 +203,6 @@ def get_qfq_price_DF_by_adj_factor(src_data: pd.DataFrame) -> pd.DataFrame:
     src_data_cp['pct_chg'] = src_data_cp['pct_chg'].round(4)
     return src_data_cp
 
-def tmp_download_div_data(ts_code: str, src: Literal['sina', 'xueqiu']='sina'):
-    """
-    下载分红数据
-    :param ts_code: 股票代码, 如 000001 或 000001.SZ
-    :param src: 数据来源, 'sina' 或 'xueqiu', 默认 'sina'
-    NOTE: 如果未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据   
-    """
-    if src == 'sina':
-        try:
-            from basic_data import download_dividend_data_from_sina
-            download_dividend_data_from_sina(ts_code=ts_code)
-        except Exception as e:
-            print(f'{ts_code} download_dividend_data_from_sina failed: {e}')
-    elif src == 'xueqiu':
-        try:
-            from basic_data import download_dividend_data_from_xueqiu
-            download_dividend_data_from_xueqiu(ts_code=ts_code)
-        except Exception as e:
-            print(f'{ts_code} download_dividend_data_from_xueqiu failed: {e}')
-
 def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = None) -> float:
     """
     根据XR送转股比例将start日股数转换到end日的股数
@@ -246,29 +229,8 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
         return amount
     if start > end:
         return amount
-    dividend_csv = f'{FINANDATA_DIR}/dividend/{code}.csv'
-    if not os.path.exists(dividend_csv):
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        dividend_csv = f'{FINANDATA_DIR}/sina_dividend/{code}.csv'
-        if os.path.exists(dividend_csv):
-            mtime = os.path.getmtime(dividend_csv)
-            mtime = time.strftime('%Y%m%d', time.localtime(mtime))
-            if mtime != today:
-                tmp_download_div_data(ts_code=code, src='sina')
-        else:
-            tmp_download_div_data(ts_code=code, src='sina')
-        try_xueqiu_again = (os.path.exists(dividend_csv) and \
-            time.strftime('%Y%m%d', time.localtime(os.path.getmtime(dividend_csv))) != today)
-        if not os.path.exists(dividend_csv) or try_xueqiu_again:
-            dividend_csv = f'{FINANDATA_DIR}/xueqiu_dividend/{code}.csv'
-            if os.path.exists(dividend_csv):
-                mtime = os.path.getmtime(dividend_csv)
-                mtime = time.strftime('%Y%m%d', time.localtime(mtime))
-                if mtime != today:
-                    tmp_download_div_data(ts_code=code, src='xueqiu')
-            else:
-                tmp_download_div_data(ts_code=code, src='xueqiu')
-    if not os.path.exists(dividend_csv):
+    dividend_csv = download_dividend_data_in_multi_ways(ts_code=code)  # download when needed
+    if dividend_csv is None:
         return amount
     dividend_df = pd.read_csv(dividend_csv, dtype={'ex_date': str})
     if dividend_df.empty:

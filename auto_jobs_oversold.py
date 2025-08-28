@@ -479,15 +479,13 @@ def build_buy_in_list_task():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 买入清单更新完成！')
 
-@is_trade_day(task='获取涨跌停表、停牌清单和分红送股数据')
-def get_limit_and_suspend_list_and_dividend_task():
+@is_trade_day(task='获取涨跌停表、停牌清单数据')
+def get_limit_and_suspend_list_task():
     get_up_down_limit_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 涨跌停表更新完成！')
     get_suspend_stock_list()
     print(f'({MODEL_NAME}) {today} 停牌清单更新完成！')
-    download_all_dividend_data()
-    print(f'({MODEL_NAME}) {today} 分红送股数据更新完成！')
 
 @is_trade_day(task='更新复权因子数据')
 def update_adj_data_and_XD_stock_and_trading_am_task():
@@ -615,10 +613,10 @@ def auto_run():
         id='update_buy_in_list'
     )
     scheduler.add_job(
-        get_limit_and_suspend_list_and_dividend_task,
+        get_limit_and_suspend_list_task,
         trigger='cron',
         hour=9, minute=20, misfire_grace_time=300,
-        id='get_limit_and_suspend_list_and_dividend_task'
+        id='get_limit_and_suspend_list_task'
     )
     scheduler.add_job(
         get_up_down_limit_list,

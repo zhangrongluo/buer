@@ -10,7 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, 
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST,
-                            DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV)
+                            DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV,
+                            HOLDING_LIST_ORIGIN)
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
@@ -97,6 +98,14 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base
     if not res:  # cash balance is not enough
         return
     new_row.to_csv(HOLDING_LIST, mode='a', header=False, index=False)
+    # update origin holding list for xd holding_list
+    origin_columns = ['ts_code', 'stock_name', 'industry', 'trade_date', 'date_in', 'price_in', 'amount', 'buy_point_base']
+    origin_row = [code, stock_name, industry, trade_date, date_in, price_in, amount, buy_point_base]
+    origin_df = pd.DataFrame([origin_row, ], columns=origin_columns)
+    if not os.path.exists(HOLDING_LIST_ORIGIN):
+        origin_df.to_csv(HOLDING_LIST_ORIGIN, mode='w', header=True, index=False)
+    else:
+        origin_df.to_csv(HOLDING_LIST_ORIGIN, mode='a', header=False, index=False)
     now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
     trade_log.info(f'买入 {code} {stock_name} {industry} at {price} total {amount} at {now}')
     os.system(f'afplay /System/Library/Sounds/Ping.aiff')  # play sound to remind buy in
@@ -658,13 +667,14 @@ def XD_buy_in_list():
     xd_record_df = pd.DataFrame([[today, xd_or_not]], columns=['today', 'xd_or_not'])
     xd_record_df.to_csv(XD_RECORD_BUY_IN_CSV, index=False)
 
-def XD_holding_list():
+def XD_holding_list_bak():
     """
     盘中前复权 buy_point_base 和 price_in, 对 amount 进行股数调整
     前复权和股数调整记录在 XD_RECORD_CSV 中
     NOTE:
     XD_RECORD_CSV contains columns: ts_code, trade_date, xd_date, buy_point_base, 
-    price_in, amount, xd_buy_point_base, xd_price_in, xd_amount   
+    price_in, amount, xd_buy_point_base, xd_price_in, xd_amount  
+    NOTE: 已弃用
     """
     if not os.path.exists(HOLDING_LIST):
         return
@@ -676,17 +686,18 @@ def XD_holding_list():
     xd_record_df = []
     columns = ['ts_code', 'trade_date', 'xd_date', 'buy_point_base', 'price_in', 'amount', 
                'xd_buy_point_base', 'xd_price_in', 'xd_amount']
-    for idx_row in holding_df.iterrows():
+
+    def xd_holding_list_row(idx_row):
         i, row = idx_row
         if row['status'] == 'sold_out':
-            continue
+            return None
         ts_code = row['ts_code']
         trade_date = row['trade_date']
         date_in = row['date_in']
         buy_point_base = row['buy_point_base']
         price_in = row['price_in']
         amount = row['amount']
-        tmp_list = [ts_code, trade_date, today, buy_point_base, price_in, amount, ]
+        tmp_list = [ts_code, trade_date, today, buy_point_base, price_in, amount]
         if not os.path.exists(XD_RECORD_HOLDGING_CSV):
             start_buy_point_base = trade_date
             start_price_in = date_in
@@ -705,38 +716,106 @@ def XD_holding_list():
             code=ts_code, pre_price=buy_point_base, start=start_buy_point_base, end=today,
         )
         if xd_buy_point_base == buy_point_base:
-            continue
+            return None
         xd_price_in = get_qfq_price_by_adj_factor(
             code=ts_code, pre_price=price_in, start=start_price_in, end=today,
         )
         if xd_price_in == price_in:
             xd_amount = amount
             tmp_list.extend([xd_buy_point_base, xd_price_in, xd_amount])
-            xd_record_df.append(tmp_list)
+            # 更新持仓表
             holding_df.loc[i, 'buy_point_base'] = xd_buy_point_base
-            continue
+            return tmp_list
         xd_amount = get_XR_adjust_amount_by_dividend_data(
             code=ts_code, amount=amount, start=start_price_in, end=today,
         )
         tmp_list.extend([xd_buy_point_base, xd_price_in, xd_amount])
-        xd_record_df.append(tmp_list)
         holding_df.loc[i, 'buy_point_base'] = xd_buy_point_base
         holding_df.loc[i, 'price_in'] = xd_price_in
         holding_df.loc[i, 'amount'] = xd_amount
+        return tmp_list
+
+    # 多线程处理持仓表
+    idx_rows = list(holding_df.iterrows())
+    step = 8
+    for start in range(0, len(idx_rows), step):
+        end = start + step if start + step < len(idx_rows) else len(idx_rows)
+        idx_rows_batch = idx_rows[start:end]
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(xd_holding_list_row, idx_rows_batch))
+        # 收集非None结果
+        for r in results:
+            if r is not None:
+                xd_record_df.append(r)
+
     xd_df = pd.DataFrame(xd_record_df, columns=columns)
     if xd_df.empty:
         return
-    columns = ['ts_code', 'trade_date', 'xd_date', 'buy_point_base', 'xd_buy_point_base',
-               'price_in', 'xd_price_in', 'amount', 'xd_amount']
-    xd_df = xd_df[columns]
+    columns_out = ['ts_code', 'trade_date', 'xd_date', 'buy_point_base', 'xd_buy_point_base',
+                   'price_in', 'xd_price_in', 'amount', 'xd_amount']
+    xd_df = xd_df[columns_out]
     if not os.path.exists(XD_RECORD_HOLDGING_CSV):
         xd_df.to_csv(XD_RECORD_HOLDGING_CSV, index=False)
     else:
         xd_df.to_csv(XD_RECORD_HOLDGING_CSV, mode='a', header=False, index=False)
     with lock:
         holding_df.to_csv(HOLDING_LIST, index=False)
-    # print(f'({MODEL_NAME}) 持有清单前复权和股数调整完成, 正在刷新列表...')
-    # refresh_holding_list()
+
+def XD_holding_list():
+    """
+    盘中前复权HOLDING_LIST中 buy_point_base 和 price_in, 对 amount 进行股数调整
+    从买入的原始记录 HOLDING_LIST_ORIGIN 中获取数据结合复权因子进行复权
+    """
+    if not os.path.exists(HOLDING_LIST):
+        return
+    if not os.path.exists(HOLDING_LIST_ORIGIN):
+        return
+    with lock:
+        holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str, 'date_in': str})
+        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
+        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
+    origin_holding_df = pd.read_csv(HOLDING_LIST_ORIGIN, dtype={'trade_date': str, 'date_in': str})
+    today = datetime.datetime.now().strftime('%Y%m%d')
+
+    def xd_holding_list_row(idx_row):
+        i, row = idx_row
+        if row['status'] == 'sold_out':
+            return None
+        ts_code = row['ts_code']
+        trade_date = row['trade_date']
+        # 从origin_holding_df中获取date_in buy_point_base price_in 和 amount
+        origin_res_row = origin_holding_df[(origin_holding_df['trade_date'] == trade_date) & (origin_holding_df['ts_code'] == ts_code)]
+        if origin_res_row.empty:
+            return
+        date_in = origin_res_row.iloc[0]['date_in']
+        buy_point_base = origin_res_row.iloc[0]['buy_point_base']
+        price_in = origin_res_row.iloc[0]['price_in']
+        amount = origin_res_row.iloc[0]['amount']
+        # 除权
+        xd_buy_point_base = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=buy_point_base, start=trade_date, end=today,
+        )
+        xd_price_in = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=price_in, start=date_in, end=today,
+        )
+        xd_amount = get_XR_adjust_amount_by_dividend_data(
+            code=ts_code, amount=amount, start=trade_date, end=today,
+        )
+        holding_df.loc[i, 'buy_point_base'] = xd_buy_point_base
+        holding_df.loc[i, 'price_in'] = xd_price_in
+        holding_df.loc[i, 'amount'] = xd_amount
+        print(f"{ts_code} 前复权: buy_point_base {buy_point_base} -> {xd_buy_point_base}, price_in {price_in} -> {xd_price_in}, amount {amount} -> {xd_amount}")
+
+    # 多线程处理持仓表
+    idx_rows = list(holding_df.iterrows())
+    step = 8
+    for start in range(0, len(idx_rows), step):
+        end = start + step if start + step < len(idx_rows) else len(idx_rows)
+        idx_rows_batch = idx_rows[start:end]
+        with ThreadPoolExecutor() as executor:
+            list(executor.map(xd_holding_list_row, idx_rows_batch))
+    with lock:
+        holding_df.to_csv(HOLDING_LIST, index=False)
 
 def trade_process(mode: Literal['trade', 'test'] = 'trade'):
     """
