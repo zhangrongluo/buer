@@ -17,7 +17,7 @@ from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indi
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, clear_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
-                           TEST_DATASET_PERCENT, MODEL_NAME, DROP_ROWS_CSV)
+                           TEST_DATASET_PERCENT, MODEL_NAME, DROP_ROWS_CSV, BUY_IN_LIST_ORIGIN)
 from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_data_csv, merge_all_oversold_dataset
 
 import warnings
@@ -421,27 +421,31 @@ def build_buy_in_list():
         trade_df.to_csv(f'{trade_dir}/buy_in_list_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv', index=False)
         print(f'buy_in_list_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv saved')
 
-        all_df = pd.DataFrame()
-        for dataset in dataset_to_predict_trade:
-            FORWARD_DAYS = dataset['FORWARD_DAYS']
-            BACKWARD_DAYS = dataset['BACKWARD_DAYS']
-            DOWN_FILTER = dataset['DOWN_FILTER']
-            PRED_MODELS = dataset['PRED_MODELS']
-            if PRED_MODELS == 0:
-                continue
-            list_name = f'buy_in_list_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
-            buy_in_csv = f'{trade_dir}/{list_name}'
-            buy_in_df = pd.read_csv(buy_in_csv)
-            buy_in_df['src'] = list_name
-            all_df = pd.concat([all_df, buy_in_df], ignore_index=True)
-        # drop duplicate rows with same code and trade_date, save the highest pred row
-        all_df = all_df.sort_values(by=['code', 'trade_date', 'pred'], ascending=[True, True, True])
-        all_df = all_df.drop_duplicates(subset=['code', 'trade_date'], keep='last')
-        # rename columns and save to buy_in_list.csv
-        new_columns = ['ts_code', 'stock_name', 'industry', 'trade_date', 'buy_point_base', 'chg_pct', 'max_date_forward', 
-                        'max_down_rate', 'forward_days', 'waiting_days', 'pred', 'real', 'pred_100%', 'src']
-        all_df.columns = new_columns
-        all_df.to_csv(f'{trade_dir}/buy_in_list.csv', index=False)
+    trade_dir = f'{TRADE_DIR}/oversold'
+    os.makedirs(trade_dir, exist_ok=True)
+    all_df = pd.DataFrame()
+    for dataset in dataset_to_predict_trade:
+        FORWARD_DAYS = dataset['FORWARD_DAYS']
+        BACKWARD_DAYS = dataset['BACKWARD_DAYS']
+        DOWN_FILTER = dataset['DOWN_FILTER']
+        PRED_MODELS = dataset['PRED_MODELS']
+        if PRED_MODELS == 0:
+            continue
+        list_name = f'buy_in_list_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
+        buy_in_csv = f'{trade_dir}/{list_name}'
+        buy_in_df = pd.read_csv(buy_in_csv)
+        buy_in_df['src'] = list_name
+        all_df = pd.concat([all_df, buy_in_df], ignore_index=True)
+    # drop duplicate rows with same code and trade_date, save the highest pred row
+    all_df = all_df.sort_values(by=['code', 'trade_date', 'pred'], ascending=[True, True, True])
+    all_df = all_df.drop_duplicates(subset=['code', 'trade_date'], keep='last')
+    # rename columns and save to buy_in_list.csv
+    new_columns = ['ts_code', 'stock_name', 'industry', 'trade_date', 'buy_point_base', 'chg_pct', 'max_date_forward', 
+                    'max_down_rate', 'forward_days', 'waiting_days', 'pred', 'real', 'pred_100%', 'src']
+    all_df.columns = new_columns
+    all_df.to_csv(f'{trade_dir}/buy_in_list.csv', index=False)  # BUY_IN_LIST
+    shutil.copy(f'{trade_dir}/buy_in_list.csv', BUY_IN_LIST_ORIGIN)  # BUY_IN_LIST_ORIGIN for xd
+    print(f'buy_in_list.csv saved with {len(all_df)} records')
 
 scheduler = BackgroundScheduler()
 scheduler.configure(timezone='Asia/Shanghai')

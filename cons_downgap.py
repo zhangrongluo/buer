@@ -28,6 +28,7 @@ dataset_group_cons = {
         'XD_RECORD_HOLDING_CSV': os.path.join(trade_root, f'max_trade_days_50', 'xd_record_holding.csv'),
         'XD_RECORD_BUY_IN_CSV': os.path.join(trade_root, f'max_trade_days_50', 'xd_record_buy_in.csv'),
         'HOLDING_LIST_ORIGIN': os.path.join(trade_root, f'max_trade_days_50', 'holding_list_origin.csv'),
+        'BUY_IN_LIST_ORIGIN': os.path.join(trade_root, f'max_trade_days_50', 'buy_in_list_origin.csv')
     },
     'group_45': {
         'MODEL_NAME': 'DownGap >>> 45',  # 模型名称
@@ -51,6 +52,7 @@ dataset_group_cons = {
         'XD_RECORD_HOLDING_CSV': os.path.join(trade_root, f'max_trade_days_45', 'xd_record_holding.csv'),
         'XD_RECORD_BUY_IN_CSV': os.path.join(trade_root, f'max_trade_days_45', 'xd_record_buy_in.csv'),
         'HOLDING_LIST_ORIGIN': os.path.join(trade_root, f'max_trade_days_45', 'holding_list_origin.csv'),
+        'BUY_IN_LIST_ORIGIN': os.path.join(trade_root, f'max_trade_days_45', 'buy_in_list_origin.csv')
     },
     'common':{
         'COST_FEE': 0.0006,

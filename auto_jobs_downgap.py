@@ -384,6 +384,7 @@ def build_buy_in_list():
         MAX_TRADE_DAYS = dataset_group_cons[group].get('MAX_TRADE_DAYS')
         MIN_PRED_RATE = dataset_group_cons[group].get('MIN_PRED_RATE')
         PRED_RATE_PCT = dataset_group_cons[group].get('PRED_RATE_PCT')
+        BUY_IN_LIST_ORIGIN = dataset_group_cons[group].get('BUY_IN_LIST_ORIGIN')
         exception_list = dataset_group_cons['common'].get('exception_list')
         model_name_1 = dataset_group_cons[group].get('MODEL_NAME')
         if MAX_TRADE_DAYS is None:
@@ -430,6 +431,7 @@ def build_buy_in_list():
         os.makedirs(trade_dir, exist_ok=True)
         csv_name = f'{trade_dir}/buy_in_list.csv'
         trade_df.to_csv(csv_name, index=False)
+        shutil.copy(csv_name, BUY_IN_LIST_ORIGIN)   # BUY_IN_LIST_ORIGIN for xd
         print(f'({model_name_1}) 买入清单生成完成')
 
 scheduler = BackgroundScheduler()

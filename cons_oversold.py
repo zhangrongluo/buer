@@ -28,6 +28,7 @@ INDICATOR_CSV = f'{TRADE_DIR}/oversold/indicator.csv'  # 指标数据
 XD_RECORD_HOLDGING_CSV = f'{TRADE_DIR}/oversold/xd_record_holding.csv'  # 盘中前复权和股数调整记录
 XD_RECORD_BUY_IN_CSV = f'{TRADE_DIR}/oversold/xd_record_buy_in.csv'  # 盘中前复权记录
 DROP_ROWS_CSV = f'{TRADE_DIR}/oversold/drop_rows.csv'  # 买入清单中被删除的不符合要求的记录,理论上不应该存在此文件
+BUY_IN_LIST_ORIGIN = f'{TRADE_DIR}/oversold/buy_in_list_origin.csv'  # 原始买入清单
 HOLDING_LIST_ORIGIN = f'{TRADE_DIR}/oversold/holding_list_origin.csv'  # 原始持仓清单
 
 # TO_UPDATE == False, SKIP updating dataset

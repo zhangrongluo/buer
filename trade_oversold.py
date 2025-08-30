@@ -11,7 +11,7 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST,
                             DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV,
-                            HOLDING_LIST_ORIGIN)
+                            HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN)
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
@@ -613,12 +613,13 @@ def clear_buy_in_list(tolerance: float = 0.95) -> pd.DataFrame | None:
     else:
         return
     
-def XD_buy_in_list():
+def XD_buy_in_list_bak():
     """
     盘中前复权 buy_point_base
     NOTE:
     save the result to XD_RECORD_BUY_IN_CSV(only one row),
     XD_RECORD_BUY_IN_CSV contains columns: today, xd_or_not
+    NOTE: 已弃用
     """
     if not os.path.exists(BUY_IN_LIST):
         return
@@ -666,6 +667,46 @@ def XD_buy_in_list():
     xd_or_not = True
     xd_record_df = pd.DataFrame([[today, xd_or_not]], columns=['today', 'xd_or_not'])
     xd_record_df.to_csv(XD_RECORD_BUY_IN_CSV, index=False)
+
+def XD_buy_in_list():
+    """
+    通过BUY_IN_LIST_ORIGIN盘中前复权 buy_point_base
+    """
+    if not os.path.exists(BUY_IN_LIST):
+        return
+    if not os.path.exists(BUY_IN_LIST_ORIGIN):
+        return
+    with lock:
+        buy_in_df = pd.read_csv(BUY_IN_LIST, dtype={'trade_date': str})
+    origin_buy_in_df = pd.read_csv(BUY_IN_LIST_ORIGIN, dtype={'trade_date': str})
+    today = datetime.datetime.now().strftime('%Y%m%d')
+
+    def xd_buy_in_list_row(idx_row):
+        i, row = idx_row
+        # 两个文件顺序完全一致，通过索引号从BUY_IN_LIST_ORIGIN获取原始 buy_point_base,
+        origin_row = origin_buy_in_df.iloc[i]
+        ts_code = origin_row['ts_code']
+        trade_date = origin_row['trade_date']
+        buy_point_base = origin_row['buy_point_base']
+        # 对BUY_IN_LIST除权
+        xd_buy_point_base = get_qfq_price_by_adj_factor(
+            code=ts_code, pre_price=buy_point_base, start=trade_date, end=today
+        )
+        if xd_buy_point_base == buy_point_base:
+            return
+        buy_in_df.loc[i, 'buy_point_base'] = xd_buy_point_base
+
+    idx_rows = list(buy_in_df.iterrows())
+    # 单一多线程模式优化为外层循环，内层多线程模式，每次循环使用 8 个线程, 减少线程创建和销毁的开销
+    all_rows = len(idx_rows)
+    step = 8
+    for start in range(0, all_rows, step):
+        end = start + step if start + step < all_rows else all_rows
+        idx_rows_batch = idx_rows[start:end]
+        with ThreadPoolExecutor() as executor:
+            executor.map(xd_buy_in_list_row, idx_rows_batch)
+    with lock:
+        buy_in_df.to_csv(BUY_IN_LIST, index=False)
 
 def XD_holding_list_bak():
     """
@@ -804,7 +845,6 @@ def XD_holding_list():
         holding_df.loc[i, 'buy_point_base'] = xd_buy_point_base
         holding_df.loc[i, 'price_in'] = xd_price_in
         holding_df.loc[i, 'amount'] = xd_amount
-        print(f"{ts_code} 前复权: buy_point_base {buy_point_base} -> {xd_buy_point_base}, price_in {price_in} -> {xd_price_in}, amount {amount} -> {xd_amount}")
 
     # 多线程处理持仓表
     idx_rows = list(holding_df.iterrows())
