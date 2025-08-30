@@ -171,6 +171,7 @@ predict/
 temp/
 trade/
 backup/
+test/
 demo.*
 *.ipynb
 cons_hidden.py

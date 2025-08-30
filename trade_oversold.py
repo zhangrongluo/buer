@@ -12,7 +12,7 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST,
                             DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV,
                             HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN)
-from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR
+from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, TEST_DIR
 from cons_hidden import bark_device_key
 from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
                    get_up_down_limit, early_sell_standard_oversold, is_rising_or_not, is_decreasing_or_not, 
@@ -885,10 +885,22 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         # 在实际交易时间内执行交易逻辑
         one_trade_loop()
     if mode == 'test' and not is_within_trading_hours():
-        # 在非交易时间执行交易逻辑
+        # 在非交易时间测试交易逻辑
         import shutil
-        shutil.copytree(trade_dir, f'{trade_dir}_test_copy', dirs_exist_ok=True)
+        shutil.copytree(trade_dir, f'{trade_dir}_copy', dirs_exist_ok=True)
+        # 删除 trade_dir中不含有'buy_in_list'的文件
+        for root, dirs, files in os.walk(trade_dir):
+            for file in files:
+                if 'buy_in_list' not in file:
+                    os.remove(os.path.join(root, file))
+        # 测试交易逻辑
         one_trade_loop()
+        # 把 trade_dir 复制到 TEST_DIR/oversold
+        shutil.copytree(trade_dir, f'{TEST_DIR}/oversold', dirs_exist_ok=True)
+        # 恢复原始交易目录
+        shutil.copytree(f'{trade_dir}_copy', trade_dir, dirs_exist_ok=True)
+        shutil.rmtree(f'{trade_dir}_copy')
+
     if mode not in ['trade', 'test']:
         print(f'Invalid mode: {mode}. Use "trade" or "test".')
         return

@@ -17,7 +17,7 @@ dataset_group_cons = {
         'MAX_STOCKS': 45,  # 最大持仓股票数
         'ONE_TIME_FUNDS': 60000,  # 单次买入资金
         'PRED_MODELS': 6,  # 预测交易集的模型数
-        'train_times': 15,  # 训练次数
+        'train_times': 24,  # 训练次数
         'initial_funds': 6e6,  # 初始资金600万
         'BUY_IN_LIST': os.path.join(trade_root, f'max_trade_days_50', 'buy_in_list.csv'),
         'HOLDING_LIST': os.path.join(trade_root, f'max_trade_days_50', 'holding_list.csv'),
@@ -41,7 +41,7 @@ dataset_group_cons = {
         'MAX_STOCKS': 45,
         'ONE_TIME_FUNDS': 60000,
         'PRED_MODELS': 6,
-        'train_times': 15,  # 训练次数
+        'train_times': 24,  # 训练次数
         'initial_funds': 6e6,
         'BUY_IN_LIST': os.path.join(trade_root, f'max_trade_days_45', 'buy_in_list.csv'),
         'HOLDING_LIST': os.path.join(trade_root, f'max_trade_days_45', 'holding_list.csv'),

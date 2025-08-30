@@ -4,11 +4,9 @@ basic_data.py 通过股票代码依次更新数据，每只股票下载一次，
 basic_data_alt_edition.py 通过全部股票每日数据更新，全部股票下载一次，每次只能更新一天。快且全面
 """
 import os
-import time
 import datetime
 import pandas as pd
 import re
-from typing import Literal
 import requests
 import tqdm
 from io import StringIO
@@ -93,6 +91,8 @@ def update_all_daily_data(step: int = 5):
     """
     dest_dir = f'{BASICDATA_DIR}/dailydata'
     os.makedirs(dest_dir, exist_ok=True)
+    if not os.path.exists(DAILY_DATA_TEMP_CSV):
+        download_all_stocks_daily_temp_data()
     daily_data_temp_df = pd.read_csv(DAILY_DATA_TEMP_CSV, dtype={'trade_date': str})
     all_stocks = len(daily_data_temp_df)
 
@@ -164,6 +164,8 @@ def update_all_daily_indicator(step: int = 5):
     """
     dest_dir = f'{BASICDATA_DIR}/dailyindicator'
     os.makedirs(dest_dir, exist_ok=True)
+    if not os.path.exists(DAILY_INDICATOR_TEMP_CSV):
+        download_all_stocks_daily_temp_indicator_data()
     daily_indicator_temp_df = pd.read_csv(DAILY_INDICATOR_TEMP_CSV, dtype={'trade_date': str})
     all_stocks = len(daily_indicator_temp_df)
 
@@ -209,21 +211,25 @@ def update_all_daily_indicator(step: int = 5):
         bar.update(step)
     bar.close()
 
-def download_dividend_data(ts_code: str):
+def download_dividend_data(ts_code: str) -> str | None:
     """
     download dividend data from tushare
     :param ts_code: stock code, 600036 or 600036.SH
-    :return: None
+    :return: csv file path or None(fail)
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
-    dividend_df = pro.dividend(ts_code=ts_code)
-    msg = get_name_and_industry_by_code(ts_code)
-    dividend_df.insert(1, 'name', msg[0])
-    dividend_df.insert(2, 'industry', msg[1])
-    dest_dir = f'{FINANDATA_DIR}/dividend'
-    os.makedirs(dest_dir, exist_ok=True)
-    dividend_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+    try:
+        dividend_df = pro.dividend(ts_code=ts_code)
+        msg = get_name_and_industry_by_code(ts_code)
+        dividend_df.insert(1, 'name', msg[0])
+        dividend_df.insert(2, 'industry', msg[1])
+        dest_dir = f'{FINANDATA_DIR}/dividend'
+        os.makedirs(dest_dir, exist_ok=True)
+        dividend_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+        return f'{dest_dir}/{ts_code}.csv'
+    except Exception as e:
+        return None
 
 def download_all_dividend_data(step: int = 5):
     """
@@ -241,12 +247,12 @@ def download_all_dividend_data(step: int = 5):
         bar.update(step)
     bar.close()
 
-def download_dividend_data_from_sina(ts_code: str):
+def download_dividend_data_from_sina(ts_code: str) -> str | None:
     """
     get dividend data from sina finance
     :param ts_code: stock code, 600036 or 600036.SH
-    :return: None
-    NOTE: 
+    :return: csv file path or None(fail)
+    NOTE:
     ts_code should be in the format of 600036.SH or 000036.SZ,
     then 600036.SH -> 600036, 000036.SZ -> 000036
     """
@@ -254,11 +260,11 @@ def download_dividend_data_from_sina(ts_code: str):
     url = f'https://vip.stock.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/{ts_code}.phtml'
     response = requests.get(url)
     if response.status_code != 200:
-        return
+        return None
     try:
         div_df = pd.read_html(StringIO(response.text))[12]
         if div_df.empty:
-            return
+            return None
         div_df.columns = ['ann_date', 'stk_bo_rate', 'stk_co_rate', 'cash_div_tax', 'div_proc', \
                         'ex_date', 'record_date', 'div_listdate', 'detail']
         div_df = div_df[div_df.columns[:-1]]
@@ -282,14 +288,16 @@ def download_dividend_data_from_sina(ts_code: str):
         dest_dir = f'{FINANDATA_DIR}/sina_dividend'
         os.makedirs(dest_dir, exist_ok=True)
         div_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+        return f'{dest_dir}/{ts_code}.csv'
     except Exception as e:
         print(f'download {ts_code} {msg[0]} dividend data from sina Error: {e}')
+        return None
 
-def download_dividend_data_from_xueqiu(ts_code: str):
+def download_dividend_data_from_xueqiu(ts_code: str) -> str | None:
     """
     get dividend data from xueqiu
     :param ts_code: stock code, 600036 or 600036.SH
-    :return: None
+    :return: csv file path or None(fail)
     NOTE:
     ts_code should be in the format of 600036.SH or 000036.SZ,
     then 600036.SH -> SH600036, 000036.SZ -> SZ000036
@@ -306,7 +314,7 @@ def download_dividend_data_from_xueqiu(ts_code: str):
         html = tab.ele('tag:table@class=table table-bordered table-hover')
         div_df = pd.read_html(StringIO(html.html))[0]
         if div_df.empty:
-            return
+            return None
         ts_code = ts_code[2:] + '.SH' if ts_code[0:2] == 'SH' else ts_code[2:] + '.SZ'
         div_df.insert(0, 'ts_code', ts_code)
         msg = get_name_and_industry_by_code(ts_code)
@@ -333,6 +341,7 @@ def download_dividend_data_from_xueqiu(ts_code: str):
                 div_df.at[idx, 'div_proc'] = '实施' if '实施' in div_plan else None
             except Exception as e:
                 print(f'Error processing row {idx} in dividend data: {e}')
+                return None
         div_df.columns = ['ts_code', 'name', 'industry', 'report', 'div_plan', 'reg_date', 'ex_date', 'pay_date', \
                         'stk_div', 'stk_bo_rate', 'stk_co_rate', 'cash_div_tax', 'div_proc']
         columns = ['ts_code', 'name', 'industry', 'report', 'div_plan', 'stk_div', 'stk_bo_rate', 'stk_co_rate', \
@@ -345,8 +354,10 @@ def download_dividend_data_from_xueqiu(ts_code: str):
         os.makedirs(dest_dir, exist_ok=True)
         div_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
         browser.quit()
+        return f'{dest_dir}/{ts_code}.csv'
     except Exception as e:
         print(f'download {ts_code} {msg[0]} dividend data from xueqiu Error: {e}')
+        return None
 
 def download_dividend_data_in_multi_ways(ts_code: str) -> str | None:
     """
@@ -358,34 +369,14 @@ def download_dividend_data_in_multi_ways(ts_code: str) -> str | None:
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
-    try:
-        download_dividend_data(ts_code=ts_code)
-        dividend_csv = f'{FINANDATA_DIR}/dividend/{ts_code}.csv'
-        if not os.path.exists(dividend_csv):
-            today = datetime.datetime.now().strftime('%Y%m%d')
-            dividend_csv = f'{FINANDATA_DIR}/sina_dividend/{ts_code}.csv'
-            if os.path.exists(dividend_csv):
-                mtime = os.path.getmtime(dividend_csv)
-                mtime = time.strftime('%Y%m%d', time.localtime(mtime))
-                if mtime != today:
-                    download_dividend_data_from_sina(ts_code=ts_code)
-            else:
-                download_dividend_data_from_sina(ts_code=ts_code)
-            try_xueqiu_again = (os.path.exists(dividend_csv) and \
-                time.strftime('%Y%m%d', time.localtime(os.path.getmtime(dividend_csv))) != today)
-            if not os.path.exists(dividend_csv) or try_xueqiu_again:
-                dividend_csv = f'{FINANDATA_DIR}/xueqiu_dividend/{ts_code}.csv'
-                if os.path.exists(dividend_csv):
-                    mtime = os.path.getmtime(dividend_csv)
-                    mtime = time.strftime('%Y%m%d', time.localtime(mtime))
-                    if mtime != today:
-                        download_dividend_data_from_xueqiu(ts_code=ts_code)
-                else:
-                    download_dividend_data_from_xueqiu(ts_code=ts_code)
-        return dividend_csv
-    except Exception as e:
-        print(f'download {ts_code} dividend data Error: {e}')
+    dividend_csv = download_dividend_data(ts_code=ts_code)
+    if dividend_csv is None:
+        dividend_csv = download_dividend_data_from_sina(ts_code=ts_code)
+    if dividend_csv is None:
+        dividend_csv = download_dividend_data_from_xueqiu(ts_code=ts_code)
+    if dividend_csv is None:
         return None
+    return dividend_csv
 
 def download_adj_factor_data(ts_code: str):
     """
@@ -411,6 +402,8 @@ def update_all_adj_factor_data(step: int = 5):
     """
     dest_dir = f'{BASICDATA_DIR}/adjfactor'
     os.makedirs(dest_dir, exist_ok=True)
+    if not os.path.exists(DAILY_ADJFACTOR_TEMP_CSV):
+        download_all_stocks_daily_temp_adjfactor_data()
     daily_adj_factor_temp_df = pd.read_csv(DAILY_ADJFACTOR_TEMP_CSV, dtype={'trade_date': str})
     all_stocks = len(daily_adj_factor_temp_df)
 

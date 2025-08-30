@@ -10,6 +10,7 @@ MODELS_DIR = os.path.join(ROOT, 'models')
 PREDICT_DIR = os.path.join(ROOT, 'predict')
 TRADE_DIR = os.path.join(ROOT, 'trade')
 TEMP_DIR = os.path.join(ROOT, 'temp')
+TEST_DIR = os.path.join(ROOT, 'test')
 
 # Create directories if they do not exist
 os.makedirs(BASICDATA_DIR, exist_ok=True)
@@ -20,6 +21,7 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(PREDICT_DIR, exist_ok=True)
 os.makedirs(TRADE_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
+os.makedirs(TEST_DIR, exist_ok=True)
 
 # FILES
 STOCK_LIST_XLS = os.path.join(BASICDATA_DIR, 'common', 'stocklist.xlsx')
