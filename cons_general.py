@@ -23,11 +23,11 @@ os.makedirs(TRADE_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(TEST_DIR, exist_ok=True)
 
-# FILES
-STOCK_LIST_XLS = os.path.join(BASICDATA_DIR, 'common', 'stocklist.xlsx')
-TRADE_CAL_XLS = os.path.join(BASICDATA_DIR, 'common', 'trade_cal.xlsx')
-UP_DOWN_LIMIT_XLS = os.path.join(BASICDATA_DIR, 'common', 'up_down_limit.xlsx')
-SUSPEND_STOCK_XLS = os.path.join(BASICDATA_DIR, 'common', 'suspend_stock_list.xlsx')
+# files
+STOCK_LIST_CSV = os.path.join(BASICDATA_DIR, 'common', 'stocklist.csv')
+TRADE_CAL_CSV = os.path.join(BASICDATA_DIR, 'common', 'trade_cal.csv')
+UP_DOWN_LIMIT_CSV = os.path.join(BASICDATA_DIR, 'common', 'up_down_limit.csv')
+SUSPEND_STOCK_CSV = os.path.join(BASICDATA_DIR, 'common', 'suspend_stock_list.csv')
 
 # contains all stock's daily data
 DAILY_DATA_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_data_temp.csv')

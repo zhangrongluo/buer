@@ -15,7 +15,7 @@ from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up
 from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data,
                                     download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, download_all_stocks_daily_temp_indicator_data)
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, clear_buy_in_list
-from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_XLS, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
+from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_CSV, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
                            TEST_DATASET_PERCENT, MODEL_NAME, DROP_ROWS_CSV, BUY_IN_LIST_ORIGIN)
 from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_data_csv, merge_all_oversold_dataset
@@ -31,7 +31,7 @@ def is_trade_day(task: str = None):
     """
     def decorator(func):
         def wrapper(*args, **kwargs):
-            df = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
+            df = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
             df = df.sort_values(by='cal_date', ascending=False)
             res = df["is_open"][0]
             if res:
@@ -50,7 +50,7 @@ def update_dataset():
     codes = [stock[0] for stock in all_stocks]
     steps = 5
 
-    trade_cal = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
+    trade_cal = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
     trade_cal = trade_cal[trade_cal['is_open'] == 1]
     trade_cal = trade_cal.sort_values(by='cal_date', ascending=False)
     last_cal_date = trade_cal.iloc[0]['cal_date']
@@ -492,15 +492,11 @@ def get_limit_and_suspend_list_task():
     print(f'({MODEL_NAME}) {today} 停牌清单更新完成！')
 
 @is_trade_day(task='更新复权因子数据')
-def update_adj_data_and_XD_stock_and_trading_am_task():
+def download_and_update_adj_data_task():
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     download_all_stocks_daily_temp_adjfactor_data()
     update_all_adj_factor_data()
     print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
-    # 更新复权因子和分红数据后，执行盘中前复权和股数调整
-    XD_stock_list_task()
-    # 执行上午的股票交易任务
-    trading_task_am(scheduler=scheduler)
 
 @is_trade_day(task='盘中前复权和股数调整')
 def XD_stock_list_task():
@@ -629,10 +625,38 @@ def auto_run():
         id='get_up_down_limit_list_again'
     )
     scheduler.add_job(
+        download_and_update_adj_data_task,
+        trigger='cron',
+        hour=9, minute=30, second=15, misfire_grace_time=300,
+        id='download_and_update_adj_data_task'
+    )
+    scheduler.add_job(
+        XD_stock_list_task,
+        trigger='cron',
+        hour=9, minute=32, second=45, misfire_grace_time=300,
+        id='XD_stock_list_task'
+    )
+    scheduler.add_job(
+        trading_task_pm,
+        args=[scheduler],
+        trigger='cron',
+        hour=9, minute=35, misfire_grace_time=300,
+        id=f'{MODEL_NAME}_start_trading_job_am',
+        name='Start_trading_program_at_09:35_AM',
+    )
+    scheduler.add_job(
         backup_trade_data,
         trigger='cron',
         hour=11, minute=45, misfire_grace_time=300,
         id='backup_trade_data_am'
+    )
+    scheduler.add_job(
+        trading_task_pm,
+        args=[scheduler],
+        trigger='cron',
+        hour=12, minute=55, misfire_grace_time=300,
+        id=f'{MODEL_NAME}_start_trading_job_pm',
+        name='Start_trading_program_at_12:55_PM',
     )
     scheduler.add_job(
         calculate_today_statistics_indicators,
@@ -663,23 +687,6 @@ def auto_run():
         trigger='cron',
         day_of_week='sat', hour=1, minute=0, misfire_grace_time=300,
         id='train_and_predict_dataset'
-    )
-
-    # 动态任务
-    scheduler.add_job(
-        # include XD_stock_list and trading_task_am
-        update_adj_data_and_XD_stock_and_trading_am_task,
-        trigger='cron',
-        hour=9, minute=31, misfire_grace_time=300,
-        id='update_adj_factor_data'
-    )
-    scheduler.add_job(
-        trading_task_pm,
-        args=[scheduler],
-        trigger='cron',
-        hour=12, minute=55, misfire_grace_time=300,
-        id=f'{MODEL_NAME}_start_trading_job_pm',
-        name='Start_trading_program_at_12:55_PM',
     )
     scheduler.start()
     print(f'({MODEL_NAME}) 开始启动自动运行,按CTRL+C退出')

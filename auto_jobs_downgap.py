@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from trade_downgap import trade_process, XD_buy_in_list, XD_holding_list
 from datasets_downgap import get_gaps_statistic_data, refresh_the_gap_csv, merge_all_gap_data
-from cons_general import TRADE_CAL_XLS, TEMP_DIR, MODELS_DIR, PREDICT_DIR, TRADE_DIR, BASICDATA_DIR, DATASETS_DIR, BACKUP_DIR
+from cons_general import TRADE_CAL_CSV, TEMP_DIR, MODELS_DIR, PREDICT_DIR, TRADE_DIR, BASICDATA_DIR, DATASETS_DIR, BACKUP_DIR
 from cons_downgap import MODEL_NAME, dataset_group_cons
 from stocklist import get_all_stocks_info
 from utils import calculate_today_series_statistic_indicator
@@ -44,7 +44,7 @@ def is_trade_day(task: str = None):
     """
     def decorator(func):
         def wrapper(*args, **kwargs):
-            df = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
+            df = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
             df = df.sort_values(by='cal_date', ascending=False)
             res = df["is_open"][0]
             if res:
@@ -588,26 +588,25 @@ def auto_run():
     scheduler.add_job(
         XD_stock_list_task,
         trigger='cron',
-        # waiting for downloading adj factors data
-        hour=9, minute=43, misfire_grace_time=300,
+        hour=9, minute=32, second=45, misfire_grace_time=300,
         id='XD_stock_list_task',
-        name='每天9:43盘中前复权和股数调整'
+        name='每天9:32盘中前复权和股数调整'
     )
     scheduler.add_job(
         trading_task_am,
         args=[scheduler, 50],
         trigger='cron',
-        hour=9, minute=45, misfire_grace_time=300,
+        hour=9, minute=35, second=5, misfire_grace_time=300,
         id=f'{MODEL_NAME}_start_trading_job_am_50',
-        name='Start_trading_program_at_9:45_AM_50',
+        name='Start_trading_program_at_9:35_AM_50',
     )
     scheduler.add_job(
         trading_task_am,
         args=[scheduler, 45],
         trigger='cron',
-        hour=9, minute=46, misfire_grace_time=300,
+        hour=9, minute=35, second=10, misfire_grace_time=300,
         id=f'{MODEL_NAME}_start_trading_job_am_45',
-        name='Start_trading_program_at_9:46_AM_45',
+        name='Start_trading_program_at_9:35_AM_45',
     )
     scheduler.add_job(
         backup_trade_data,

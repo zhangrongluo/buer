@@ -4,7 +4,7 @@
 import datetime
 import tushare as ts 
 import pandas as pd
-from cons_general import STOCK_LIST_XLS, TRADE_CAL_XLS, UP_DOWN_LIMIT_XLS, SUSPEND_STOCK_XLS
+from cons_general import STOCK_LIST_CSV, TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, SUSPEND_STOCK_CSV
 
 __all__ = ['get_name_and_industry_by_code', 'get_all_stocks_info', 'STOCK_LIST_NUMS', 'LIST_DF', 'pro']
 
@@ -16,7 +16,7 @@ def get_stock_list():
     get stock list and save to the basicdata dir
     """
     stocklist_df = pro.stock_basic(exchange='', list_status='L')
-    stocklist_df.to_excel(STOCK_LIST_XLS, index=False)
+    stocklist_df.to_csv(STOCK_LIST_CSV, index=False)
 
 get_stock_list()
 
@@ -31,7 +31,7 @@ def get_trade_cal():
     trade_cal_df = pro.trade_cal(exchange='', start_date=start_date, end_date=end_date)
     # trade_cal_df = trade_cal_df[trade_cal_df['is_open'] == 1]
     trade_cal_df = trade_cal_df[['cal_date', 'is_open']]
-    trade_cal_df.to_excel(TRADE_CAL_XLS, index=False)
+    trade_cal_df.to_csv(TRADE_CAL_CSV, index=False)
 
 get_trade_cal()  # build trade calendar
 
@@ -42,7 +42,7 @@ def load_list_df():
     """
     global LIST_DF
     suffix = ['.sz', '.sh', '.SZ', '.SH']
-    LIST_DF = pd.read_excel(STOCK_LIST_XLS, dtype=str)
+    LIST_DF = pd.read_csv(STOCK_LIST_CSV, dtype=str)
     LIST_DF = LIST_DF[LIST_DF['ts_code'].str.contains('|'.join(suffix))]
     total_stocks = LIST_DF.shape[0]
     return total_stocks
@@ -84,7 +84,7 @@ def get_up_down_limit_list():
     today = datetime.date.today().strftime('%Y%m%d')
     up_down_limit_df = pro.stk_limit(trade_date=today)
     up_down_limit_df = up_down_limit_df.dropna(how='any')
-    up_down_limit_df.to_excel(UP_DOWN_LIMIT_XLS, index=False)
+    up_down_limit_df.to_csv(UP_DOWN_LIMIT_CSV, index=False)
 
 def get_suspend_stock_list():
     """
@@ -92,7 +92,7 @@ def get_suspend_stock_list():
     """
     today = datetime.date.today().strftime('%Y%m%d')
     suspend_df = pro.suspend_d(suspend_type='S', trade_date=today)
-    suspend_df.to_excel(SUSPEND_STOCK_XLS, index=False)
+    suspend_df.to_csv(SUSPEND_STOCK_CSV, index=False)
 
 if __name__ == '__main__':
     # test

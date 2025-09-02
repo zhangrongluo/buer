@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import json
 import pandas as pd
 import datetime
 import requests
@@ -8,7 +9,7 @@ import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
 from basic_data_alt_edition import download_dividend_data_in_multi_ways
-from cons_general import TRADE_CAL_XLS, FINANDATA_DIR, UP_DOWN_LIMIT_XLS, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_XLS, TEMP_DIR
+from cons_general import TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, TEMP_DIR
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
 from cons_hidden import xq_a_token
@@ -131,37 +132,56 @@ def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=10) -> pd.Dat
         print(f'获取新浪数据失败:{response.status_code},请检查 token 设置、网络连接或是否为交易日')
     return res_df
 
-def get_history_realtime_price_DF_from_xueqiu(code, datalen=10) -> pd.DataFrame:
+def get_history_realtime_price_DF_from_dc(code, klt=1, datalen=10) -> pd.DataFrame:
     """
-    获取雪球今日历史实时价格数据(分钟数据)
-    :param code: 股票代码, 如 000001 或 600000.SH, 需要转换为 SZ000001 或 SH600000 格式
-    :param datalen: 返回的数据节点数量
-    :return: 实时价格数据序列或者空 DataFrame
+    从东方财富获取股票分钟级别价格数据
+    :param code: 股票代码, 000001或者000001.SZ, 需转化成 sz000001 或则sh600000 格式
+    :param klt: K线周期, 1(1分钟)、5(5分钟)、15(15分钟)、30(30分钟)、60(60分钟)
+    :return: DataFrame   
     NOTE:
-    url = 'https://stock.xueqiu.com/v5/stock/chart/minute.json?symbol=[股票代码]&period=1d'
-    period: '1d' 表示获取当天的分钟数据
+    written by Grok, 参数详细说明见 https://www.sanrenjz.com/2023/03/31/
     """
-    code = f'SZ{code[:6]}' if code.startswith('0') else f'SH{code[:6]}'
-    url = f'https://stock.xueqiu.com/v5/stock/chart/minute.json?symbol={code}&period=1d'
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-            (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
-        'Cookie': xq_a_token
+    code = 'sh' + code[:6] if code.startswith('6') else 'sz' + code[:6]
+    market = '1' if code.startswith('sh') else '0'
+    secid = f"{market}.{code[2:]}"
+    url = "http://push2.eastmoney.com/api/qt/stock/kline/get"
+    params = {
+        "secid": secid,
+        "fields1": "f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "klt": str(klt),  # K线周期
+        "fqt": "1",      # 复权类型，1=前复权
+        "beg": "0",      # 开始日期，0表示最新数据
+        "end": "20500101",  # 结束日期，设置为未来日期以获取最新数据
+        "lmt": "240",    # 获取最近 240 条记录
+        "_": str(int(time.time() * 1000))  # 时间戳，防止缓存
     }
-    response = requests.get(url, headers=headers)
-    data = response.json() if response.status_code == 200 else None
-    res = data['data']['items'] if data else None
-    res_df = pd.DataFrame(res) if res else pd.DataFrame(columns=['day', 'close', 'high', 'low'])
-    if not res_df.empty:
-        res_df = res_df[['timestamp', 'current', 'high', 'low']]
-        res_df['timestamp'] = res_df['timestamp'].apply(lambda x: datetime.datetime.fromtimestamp(x / 1000))
-        res_df['timestamp'] = res_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
-        res_df.columns = ['day', 'close', 'high', 'low']
-        res_df = res_df.tail(datalen)
-        res_df = res_df.reset_index(drop=True)
-    else:
-        print(f'获取雪球数据失败:{response.status_code},请检查 token 设置、网络连接或是否为交易日')
-    return res_df
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+            (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()  # 检查请求是否成功
+        data = json.loads(response.text)
+        if data["data"] is None:
+            print(f"未获取到股票 {code} 的数据，可能代码错误或无分钟数据")
+            return pd.DataFrame(columns=["day", "open", "close", "high", "low"])
+        kline_data = data["data"]["klines"]
+        columns = ["时间", "开盘价", "收盘价", "最高价", "最低价", "成交量", "成交额", 
+                   "振幅%", "涨跌幅%", "涨跌额", "换手率%"]
+        df = pd.DataFrame([x.split(",") for x in kline_data], columns=columns)
+        # 数据类型转换
+        for col in ["开盘价", "收盘价", "最高价", "最低价", "成交量", "成交额", "振幅%", "涨跌幅%", "涨跌额", "换手率%"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        col_out = ["时间", "开盘价", "收盘价", "最高价", "最低价"]
+        df = df[col_out]
+        df.columns = ["day", "open", "close", "high", "low"]
+        df = df.tail(datalen).sort_values(by="day").reset_index(drop=True)
+        return df
+    except Exception as e:
+        print(f"获取东方财富实时价格数据序列失败: {e}")
+        return pd.DataFrame(columns=["day", "open", "close", "high", "low"])
 
 def get_qfq_price_DF_by_adj_factor(src_data: pd.DataFrame) -> pd.DataFrame:
     """
@@ -309,7 +329,7 @@ def get_up_down_limit(code: str) -> tuple[float, float, float]:
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
     today = datetime.datetime.now().strftime('%Y%m%d')
-    up_down_df = pd.read_excel(UP_DOWN_LIMIT_XLS, dtype={'trade_date': str})
+    up_down_df = pd.read_csv(UP_DOWN_LIMIT_CSV, dtype={'trade_date': str})
     if up_down_df['trade_date'].iloc[0] != today:
         return None, None, None
     res_df = up_down_df[up_down_df['ts_code'] == code]
@@ -379,7 +399,7 @@ def is_rising_or_not(code, price_now: float, method: Literal['max', 'mean'] = 'm
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
     rt_price_df = get_history_realtime_price_DF_from_sina(code)
     if rt_price_df.empty:
-        rt_price_df = get_history_realtime_price_DF_from_xueqiu(code)
+        rt_price_df = get_history_realtime_price_DF_from_dc(code)
     if rt_price_df.empty:
         return False
     if method == 'mean':
@@ -402,7 +422,7 @@ def is_decreasing_or_not(code, price_now: float, method: Literal['min', 'mean'] 
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
     rt_price_df = get_history_realtime_price_DF_from_sina(code)
     if rt_price_df.empty:
-        rt_price_df = get_history_realtime_price_DF_from_xueqiu(code)
+        rt_price_df = get_history_realtime_price_DF_from_dc(code)
     if rt_price_df.empty:
         return False
     if method == 'mean':
@@ -417,7 +437,7 @@ def is_trade_date_or_not():
     :return: True if today is trade date, False otherwise
     """
     today = datetime.datetime.now().strftime('%Y%m%d')
-    trade_cal = pd.read_excel(TRADE_CAL_XLS, dtype={'cal_date': str})
+    trade_cal = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
     trade_cal = trade_cal[trade_cal['is_open'] == 1]
     dates = trade_cal['cal_date'].tolist()
     return today in dates
@@ -430,11 +450,11 @@ def is_suspended_or_not(code: str) -> bool:
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
-    if not os.path.exists(SUSPEND_STOCK_XLS):
+    if not os.path.exists(SUSPEND_STOCK_CSV):
         return False
     if not is_trade_date_or_not():
         return False
-    suspend_df = pd.read_excel(SUSPEND_STOCK_XLS, dtype={'ts_code': str})
+    suspend_df = pd.read_csv(SUSPEND_STOCK_CSV, dtype={'ts_code': str})
     return code in suspend_df['ts_code'].values
 
 ### statistics functions
