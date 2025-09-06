@@ -866,6 +866,9 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
     - 'trade' 模式下, 在实际交易时间内执行交易逻辑。
     - 'test' 模式下, 在非交易时间执行交易逻辑, 主要为了检测交易逻辑是否正确。
     """
+    if mode not in ['trade', 'test']:
+        print(f'Invalid mode: {mode}. Use "trade" or "test".')
+        return
     
     def is_within_trading_hours():
         now = datetime.datetime.now().time()
@@ -875,11 +878,14 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         pm_end = datetime.time(15, 0)
         return (am_begin <= now <= am_end or pm_begin <= now <= pm_end)
 
-    def one_trade_loop():
-        refresh_holding_list()
+    def one_trade_loop(mode=mode):
+        if mode == 'trade':
+            refresh_holding_list()
         scan_buy_in_list()
         scan_holding_list()
         create_daily_profit_list()
+        if mode == 'test':
+            refresh_holding_list()
 
     if mode == 'trade' and is_within_trading_hours():
         # 在实际交易时间内执行交易逻辑
@@ -900,10 +906,6 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         # 恢复原始交易目录
         shutil.copytree(f'{trade_dir}_copy', trade_dir, dirs_exist_ok=True)
         shutil.rmtree(f'{trade_dir}_copy')
-
-    if mode not in ['trade', 'test']:
-        print(f'Invalid mode: {mode}. Use "trade" or "test".')
-        return
 
 if __name__ == '__main__':
     trade_process(mode='test')  # or mode='trade' for actual trading

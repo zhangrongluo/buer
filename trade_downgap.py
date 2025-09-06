@@ -970,6 +970,10 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
     - 'trade' 模式下, 在实际交易时间内执行交易逻辑。
     - 'test' 模式下, 在非交易时间执行交易逻辑, 主要为了检测交易逻辑是否正确。
     """
+    if mode not in ['trade', 'test']:
+        print(f'Invalid mode: {mode}. Use "trade" or "test".')
+        return
+
     def is_within_trading_hours():
         now = datetime.datetime.now().time()
         am_begin = datetime.time(9, 30)
@@ -978,14 +982,17 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
         pm_end = datetime.time(15, 0)
         return (am_begin <= now <= am_end or pm_begin <= now <= pm_end)
     
-    def one_trade_loop(max_trade_days: int):
-        refresh_holding_list(max_trade_days=max_trade_days)
+    def one_trade_loop(max_trade_days: int, mode = mode):
+        if mode == 'trade':
+            refresh_holding_list(max_trade_days=max_trade_days)
         scan_buy_in_list(max_trade_days=max_trade_days)
         scan_holding_list(max_trade_days=max_trade_days)
         create_daily_profit_list(max_trade_days=max_trade_days)
+        if mode == 'test':
+            refresh_holding_list(max_trade_days=max_trade_days)
 
     if mode == 'trade' and is_within_trading_hours():
-        one_trade_loop(max_trade_days=max_trade_days)
+        one_trade_loop(max_trade_days=max_trade_days, mode=mode)
     if mode == 'test' and not is_within_trading_hours():
         import shutil
         trade_dir = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
@@ -996,7 +1003,7 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
                 if 'buy_in_list' not in file:
                     os.remove(os.path.join(root, file))
         # 测试交易逻辑
-        one_trade_loop(max_trade_days=max_trade_days)
+        one_trade_loop(max_trade_days=max_trade_days, mode=mode)
         # 把 trade_dir 复制到 TEST_DIR/downgap/max_trade_days_{max_trade_days}
         dest_dir = f'{TEST_DIR}/downgap/max_trade_days_{max_trade_days}'
         shutil.copytree(trade_dir, dest_dir, dirs_exist_ok=True)
@@ -1004,9 +1011,6 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
         shutil.copytree(f'{trade_dir}_test_copy', trade_dir, dirs_exist_ok=True)
         shutil.rmtree(f'{trade_dir}_test_copy')
 
-    if mode not in ['trade', 'test']:
-        print(f'Invalid mode: {mode}. Use "trade" or "test".')
-        return
 
 if __name__ == '__main__':
-    trade_process(max_trade_days=45, mode='test')
+    trade_process(max_trade_days=50, mode='test')
