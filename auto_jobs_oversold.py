@@ -637,7 +637,7 @@ def auto_run():
         id='XD_stock_list_task'
     )
     scheduler.add_job(
-        trading_task_pm,
+        trading_task_am,
         args=[scheduler],
         trigger='cron',
         hour=9, minute=35, misfire_grace_time=300,

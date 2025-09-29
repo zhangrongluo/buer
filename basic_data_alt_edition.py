@@ -4,6 +4,7 @@ basic_data.py 通过股票代码依次更新数据，每只股票下载一次，
 basic_data_alt_edition.py 通过全部股票每日数据更新，全部股票下载一次，每次只能更新一天。快且全面
 """
 import os
+import time
 import datetime
 import pandas as pd
 import re
@@ -20,49 +21,73 @@ warnings.filterwarnings('ignore', category=FutureWarning)  # pandas concat warni
 
 all_stocks_info = get_all_stocks_info()
 
-def download_all_stocks_daily_temp_data():
+def download_all_stocks_daily_temp_data(trade_date: str = None):
     """
     download all stock's daily temp data from tushare for update
+    :param trade_date: trade date in 'YYYYMMDD' format, default is today
     :return: None
+    NOTE:
+    如失败则等待120秒后重试,最多重试3次
     """
     # 临时存放每日数据的目录 dailydata
     dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
     os.makedirs(dailytemp_dir, exist_ok=True)
 
     today = datetime.datetime.now().strftime('%Y%m%d')
-    daily_temp_df = pro.daily(trade_date=today)
-    suffix = ['.sz', '.sh', '.SZ', '.SH']
-    daily_temp_df = daily_temp_df[daily_temp_df['ts_code'].str.contains('|'.join(suffix))]
+    trade_date = trade_date if trade_date else today
+    for _ in range(3):
+        daily_temp_df = pro.daily(trade_date=trade_date)
+        suffix = ['.sz', '.sh', '.SZ', '.SH']
+        daily_temp_df = daily_temp_df[daily_temp_df['ts_code'].str.contains('|'.join(suffix))]
+        if not daily_temp_df.empty:
+            break
+        time.sleep(120)
     daily_temp_df.to_csv(DAILY_DATA_TEMP_CSV, index=False)
 
-def download_all_stocks_daily_temp_indicator_data():
+def download_all_stocks_daily_temp_indicator_data(trade_date: str = None):
     """
     download all stock's daily temp indicator data from tushare for update
+    :param trade_date: trade date in 'YYYYMMDD' format, default is today
     :return: None
+    NOTE:
+    如失败则等待120秒后重试,最多重试3次
     """
     # 临时存放每日数据的目录 dailyindicator 
     dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
     os.makedirs(dailytemp_dir, exist_ok=True)
 
     today = datetime.datetime.now().strftime('%Y%m%d')
-    daily_indicator_df = pro.daily_basic(trade_date=today)
-    suffix = ['.sz', '.sh', '.SZ', '.SH']
-    daily_indicator_df = daily_indicator_df[daily_indicator_df['ts_code'].str.contains('|'.join(suffix))]
+    trade_date = trade_date if trade_date else today
+    for _ in range(3):
+        daily_indicator_df = pro.daily_basic(trade_date=trade_date)
+        suffix = ['.sz', '.sh', '.SZ', '.SH']
+        daily_indicator_df = daily_indicator_df[daily_indicator_df['ts_code'].str.contains('|'.join(suffix))]
+        if not daily_indicator_df.empty:
+            break
+        time.sleep(120)
     daily_indicator_df.to_csv(DAILY_INDICATOR_TEMP_CSV, index=False)
 
-def download_all_stocks_daily_temp_adjfactor_data():
+def download_all_stocks_daily_temp_adjfactor_data(trade_date: str = None):
     """
     download all stock's daily temp adjfactor data from tushare for update
+    :param trade_date: trade date in 'YYYYMMDD' format, default is today
     :return: None
+    NOTE:
+    如失败则等待15秒后重试,最多重试3次
     """
     # 临时存放每日数据的目录 dailyadjfactor
     dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
     os.makedirs(dailytemp_dir, exist_ok=True)
 
     today = datetime.datetime.now().strftime('%Y%m%d')
-    daily_adjfactor_df = pro.adj_factor(trade_date=today)
-    suffix = ['.sz', '.sh', '.SZ', '.SH']
-    daily_adjfactor_df = daily_adjfactor_df[daily_adjfactor_df['ts_code'].str.contains('|'.join(suffix))]
+    trade_date = trade_date if trade_date else today
+    for _ in range(3):
+        daily_adjfactor_df = pro.adj_factor(trade_date=trade_date)
+        suffix = ['.sz', '.sh', '.SZ', '.SH']
+        daily_adjfactor_df = daily_adjfactor_df[daily_adjfactor_df['ts_code'].str.contains('|'.join(suffix))]
+        if not daily_adjfactor_df.empty:
+            break
+        time.sleep(15)
     daily_adjfactor_df.to_csv(DAILY_ADJFACTOR_TEMP_CSV, index=False)
 
 def download_daily_data(ts_code: str):
