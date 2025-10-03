@@ -147,12 +147,7 @@ def train_dataset():
         oversold_data_dir = f'{TEMP_DIR}/oversold/data_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}'
         df_train_csv = f'{oversold_data_dir}/oversold_train_dataset_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
         df_train = pd.read_csv(df_train_csv, dtype={'trade_date': str, 'max_date_forward': str})
-        # 对df_train的pe_ttm列求正弦值
-        df_train['sina_pe_ttm'] = df_train['pe_ttm'].apply(lambda x: math.sin(x))
-        # 对forward_days列求正弦值
-        df_train['sina_forward_days'] = df_train['forward_days'].apply(lambda x: math.sin(x))
-        columns = ['pct_chg', 'vol_ratio', 'max_down_rate', 'sina_forward_days', 'RSI14', 'RSI7', 'RSI3', 'K9', 'K15', 
-                'turnover_rate', 'MAP15', 'MAP7', 'mv_ratio', 'sina_pe_ttm', 'pb', 'dv_ratio']
+        columns = ['max_down_rate', 'forward_days', 'RSI7', 'K9', 'turnover_rate', 'MAP15', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio']
         df_train_valid_test = df_train[columns]  # 测试验证集的特征值
         df_label = df_train['max_up_rate']
         test_length = int(len(df_train_valid_test) * TEST_DATASET_PERCENT)
@@ -258,12 +253,7 @@ def predict_dataset():
         # STEP 2:制作训练数据集、测试数据集
         df_train_csv = f'{oversold_data_dir}/oversold_train_dataset_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
         df_train = pd.read_csv(df_train_csv, dtype={'trade_date': str, 'max_date_forward': str})
-        # 对df_train的pe_ttm列求正弦值
-        df_train['sina_pe_ttm'] = df_train['pe_ttm'].apply(lambda x: math.sin(x))
-        # 对df_train的forward_days列求正弦值
-        df_train['sina_forward_days'] = df_train['forward_days'].apply(lambda x: math.sin(x))
-        columns = ['pct_chg', 'vol_ratio', 'max_down_rate', 'sina_forward_days', 'RSI14', 'RSI7', 'RSI3', 'K9', 'K15', 
-                'turnover_rate', 'MAP15', 'MAP7', 'mv_ratio', 'sina_pe_ttm', 'pb', 'dv_ratio']
+        columns = ['max_down_rate', 'forward_days', 'RSI7', 'K9', 'turnover_rate', 'MAP15', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio']
         df_train_valid_test = df_train[columns]  # 训练集和验证集的特征值
         df_label = df_train['max_up_rate']
         test_length = int(len(df_train_valid_test) * TEST_DATASET_PERCENT)
@@ -277,10 +267,6 @@ def predict_dataset():
         os.makedirs(oversold_data_dir, exist_ok=True)
         df_trade_csv = f'{oversold_data_dir}/oversold_trade_dataset_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
         df_trade = pd.read_csv(df_trade_csv, dtype={'trade_date': str, 'max_date_forward': str})
-        # 对df_trade的pe_ttm列求正弦值
-        df_trade['sina_pe_ttm'] = df_trade['pe_ttm'].apply(lambda x: math.sin(x))
-        # 对df_trade的forward_days列求正弦值
-        df_trade['sina_forward_days'] = df_trade['forward_days'].apply(lambda x: math.sin(x))
         x_trade = df_trade[columns]
 
         # STEP 4:评价全部模型在测试集上的表现(使用预测值和真实值的比率衡量)

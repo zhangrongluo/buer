@@ -33,3 +33,4 @@ SUSPEND_STOCK_CSV = os.path.join(BASICDATA_DIR, 'common', 'suspend_stock_list.cs
 DAILY_DATA_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_data_temp.csv')
 DAILY_INDICATOR_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_indicator_temp.csv')
 DAILY_ADJFACTOR_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_adjfactor_temp.csv')
+DAILY_QUANT_FACTOR_TEMP_CSV = os.path.join(BASICDATA_DIR, 'dailytemp', 'daily_quant_factor_temp.csv')

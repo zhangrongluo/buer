@@ -126,18 +126,13 @@ def predict_dataset():
         # STEP2: 预处理训练集+验证集+测试集
         train_csv = f'{gap_dir}/down_gap_train_data.csv'
         train_df = pd.read_csv(train_csv, dtype={'trade_date': str, 'fill_date': str})
-        # 插一列sum_date，值等于trade_date各位数字平方之和后求正弦
-        train_df['sum_date'] = train_df['trade_date'].apply(lambda x: sum([int(i) ** 2 for i in x]))
-        train_df['sum_date'] = train_df['sum_date'].apply(lambda x: (math.sin(x / 100) + 1) / 2)
-        # 对pe_ttm求正弦值，压缩取值范围
-        train_df['pe_ttm'] = train_df['pe_ttm'].apply(lambda x: (math.sin(x / 100) + 1) / 2)
-        columns = ['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'RSI7', 'RSI3', 'K', 'MAP14', 'MAP7', 'turnover_rate', 
-                'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio',  'sum_date', 'days', 'rise_percent']
+        columns = ['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'K', 'MAP14', 'turnover_rate', 
+                   'mv_ratio', 'dv_ratio',  'days', 'rise_percent']
         train_df = train_df[columns]
 
-        # STEP3: 把前14列作为特征列，最后1列作为标签列
-        x_train = train_df[['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'RSI7', 'RSI3', 'K', 'MAP14', 'MAP7', 
-                            'turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio',  'sum_date']]
+        # STEP3: 把前9列作为特征列，最后1列作为标签列
+        x_train = train_df[['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'K', 'MAP14', 'turnover_rate', 
+                            'mv_ratio', 'dv_ratio']]
         y_train = train_df['rise_percent']
         # 分割训练集和测试集
         length = len(x_train)
@@ -156,13 +151,8 @@ def predict_dataset():
         # STEP4: 准备交易集数据
         trade_csv = f'{gap_dir}/down_gap_trade_data.csv'
         trade_df = pd.read_csv(trade_csv, dtype={'trade_date': str})
-        # 插一列sum_date，值等于trade_date各位数字平方之和后求正弦
-        trade_df['sum_date'] = trade_df['trade_date'].apply(lambda x: sum([int(i) ** 2 for i in x]))
-        trade_df['sum_date'] = trade_df['sum_date'].apply(lambda x: (math.sin(x / 100) + 1) / 2)
-        # 对pe_ttm求正弦值，压缩取值范围
-        trade_df['pe_ttm'] = trade_df['pe_ttm'].apply(lambda x: (math.sin(x / 100) + 1) / 2)
-        x_trade = trade_df[['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'RSI7', 'RSI3', 'K', 'MAP14', 'MAP7', 
-                            'turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio', 'sum_date']]
+        x_trade = trade_df[['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'K', 'MAP14', 'turnover_rate', 
+                            'mv_ratio', 'dv_ratio']]
 
         # STEP5: 评价模型在测试集上的表现(使用预测值和真实值的比率衡量)
         models_dir = f'{model_root}/max_trade_days_{MAX_TRADE_DAYS}'
@@ -286,18 +276,13 @@ def train_dataset():
         # STEP2 预处理训练集+验证集+测试集
         train_csv = f'{gap_dir}/down_gap_train_data.csv'
         train_df = pd.read_csv(train_csv, dtype={'trade_date': str, 'fill_date': str})
-        # 插入一列sum_date，值等于trade_date各位数字平方之和后求正弦
-        train_df['sum_date'] = train_df['trade_date'].apply(lambda x: sum([int(i) ** 2 for i in x]))
-        train_df['sum_date'] = train_df['sum_date'].apply(lambda x: (math.sin(x) + 1) / 2)
-        # 对pe_ttm求正弦值，压缩一下取值范围
-        train_df['pe_ttm'] = train_df['pe_ttm'].apply(lambda x: (math.sin(x) + 1) / 2)
-        columns = ['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'RSI7', 'RSI3', 'K', 'MAP14', 'MAP7', 'turnover_rate', 
-                'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio',  'sum_date', 'days', 'rise_percent']
+        columns = ['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'K', 'MAP14', 'turnover_rate', 
+                   'mv_ratio', 'dv_ratio',  'days', 'rise_percent']
         train_df = train_df[columns]
 
         # STEP3 把前14列作为特征列，最后1列作为标签列
-        x_train = train_df[['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'RSI7', 'RSI3', 'K', 'MAP14', 'MAP7', 
-                            'turnover_rate', 'mv_ratio', 'pe_ttm', 'pb', 'dv_ratio',  'sum_date']]
+        x_train = train_df[['gap_percent', 'vol_ratio', 'pct_chg', 'RSI14', 'K', 'MAP14', 'turnover_rate', 
+                            'mv_ratio', 'dv_ratio']]
         y_train = train_df['rise_percent']
         # 分割训练集和测试集
         length = len(x_train)
@@ -609,6 +594,14 @@ def auto_run():
         name='Start_trading_program_at_9:35_AM_45',
     )
     scheduler.add_job(
+        trading_task_am,
+        args=[scheduler, 60],
+        trigger='cron',
+        hour=9, minute=35, second=15, misfire_grace_time=300,
+        id=f'{MODEL_NAME}_start_trading_job_am_60',
+        name='Start_trading_program_at_9:35_AM_60',
+    )
+    scheduler.add_job(
         backup_trade_data,
         trigger='cron',
         hour=11, minute=45, misfire_grace_time=300,
@@ -629,6 +622,14 @@ def auto_run():
         hour=12, minute=56, misfire_grace_time=300,
         id=f'{MODEL_NAME}_start_trading_job_pm_45',
         name='Start_trading_program_at_12:56_PM_45',
+    )
+    scheduler.add_job(
+        trading_task_pm,
+        args=[scheduler, 60],
+        trigger='cron',
+        hour=12, minute=57, misfire_grace_time=300,
+        id=f'{MODEL_NAME}_start_trading_job_pm_60',
+        name='Start_trading_program_at_12:57_PM_60',
     )
     scheduler.add_job(
         calculate_today_statistics_indicators,

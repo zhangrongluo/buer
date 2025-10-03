@@ -14,7 +14,8 @@ from io import StringIO
 from DrissionPage import ChromiumOptions, Chromium
 from concurrent.futures import ThreadPoolExecutor
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info, pro
-from cons_general import BASICDATA_DIR, FINANDATA_DIR, DAILY_DATA_TEMP_CSV, DAILY_INDICATOR_TEMP_CSV, DAILY_ADJFACTOR_TEMP_CSV
+from cons_general import (BASICDATA_DIR, FINANDATA_DIR, DAILY_DATA_TEMP_CSV, DAILY_INDICATOR_TEMP_CSV, 
+                          DAILY_ADJFACTOR_TEMP_CSV, DAILY_QUANT_FACTOR_TEMP_CSV)
 
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)  # pandas concat warning
@@ -89,6 +90,30 @@ def download_all_stocks_daily_temp_adjfactor_data(trade_date: str = None):
             break
         time.sleep(15)
     daily_adjfactor_df.to_csv(DAILY_ADJFACTOR_TEMP_CSV, index=False)
+
+def download_all_stocks_daily_simple_temp_quant_factor(trade_date: str = None):
+    """
+    download all stock's daily temp quant factor data from tushare for update
+    :param trade_date: trade date in 'YYYYMMDD' format, default is today
+    :return: None
+    NOTE:
+    如失败则等待120秒后重试,最多重试3次
+    下载的是简版量化因子数据
+    """
+    # 临时存放每日数据的目录 dailyquantfactor
+    dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
+    os.makedirs(dailytemp_dir, exist_ok=True)
+
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    trade_date = trade_date if trade_date else today
+    for _ in range(3):
+        daily_quant_factor_df = pro.stk_factor(trade_date=trade_date)
+        suffix = ['.sz', '.sh', '.SZ', '.SH']
+        daily_quant_factor_df = daily_quant_factor_df[daily_quant_factor_df['ts_code'].str.contains('|'.join(suffix))]
+        if not daily_quant_factor_df.empty:
+            break
+        time.sleep(120)
+    daily_quant_factor_df.to_csv(DAILY_QUANT_FACTOR_TEMP_CSV, index=False)
 
 def download_daily_data(ts_code: str):
     """
@@ -470,6 +495,77 @@ def update_all_adj_factor_data(step: int = 5):
     for i in range(0, all_stocks, step):
         with ThreadPoolExecutor() as executor:
             executor.map(update_adj_factor_data, idx_rows[i:i + step])
+        bar.update(step)
+    bar.close()
+
+def download_simple_quant_factor_data(ts_code: str):
+    """
+    download simple quant factor data from tushare
+    :param ts_code: stock code, 600036 or 600036.SH
+    :return: None
+    """
+    if len(ts_code) == 6:
+        ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
+    daily_quant_factor_df = pro.stk_factor(ts_code=ts_code)
+    msg = get_name_and_industry_by_code(ts_code)
+    daily_quant_factor_df.insert(1, 'name', msg[0])
+    daily_quant_factor_df.insert(2, 'industry', msg[1])
+    dest_dir = f'{BASICDATA_DIR}/dailyquantfactor'
+    os.makedirs(dest_dir, exist_ok=True)
+    daily_quant_factor_df.to_csv(f'{dest_dir}/{ts_code}.csv', index=False)
+
+def update_all_daily_simple_quant_factor(step: int = 5):
+    """
+    update daily simple quant factor data for all stocks
+    :param step: number of stocks to update at a time
+    :return: None
+    """
+    dest_dir = f'{BASICDATA_DIR}/dailyquantfactor'
+    os.makedirs(dest_dir, exist_ok=True)
+    if not os.path.exists(DAILY_QUANT_FACTOR_TEMP_CSV):
+        download_all_stocks_daily_simple_temp_quant_factor()
+    daily_quant_factor_temp_df = pd.read_csv(DAILY_QUANT_FACTOR_TEMP_CSV, dtype={'trade_date': str})
+    all_stocks = len(daily_quant_factor_temp_df)
+
+    def update_daily_simple_quant_factor(idx_row):
+        """
+        update daily quant factor data for all stocks
+        :param idx_row: contain one stock's daily quant factor data
+        :return: None
+        """
+        i, row = idx_row
+        ts_code = row['ts_code']
+        if len(ts_code) == 6:
+            ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
+        dest_dir = f'{BASICDATA_DIR}/dailyquantfactor'
+        if not os.path.exists(dest_dir):
+            os.makedirs(dest_dir)
+        dest_csv = f'{dest_dir}/{ts_code}.csv'
+        if not os.path.exists(dest_csv):
+            download_simple_quant_factor_data(ts_code=ts_code)
+            return
+        # update stock daily quant factor data
+        df = pd.read_csv(dest_csv, dtype={'trade_date': str})
+        df = df.sort_values(by='trade_date', ascending=False)
+        df.reset_index(drop=True, inplace=True)  # 重置索引
+        last_trade_date = df.iloc[0]['trade_date']
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        if today == last_trade_date:
+            return
+        msg = get_name_and_industry_by_code(ts_code)
+        row = pd.DataFrame([row])
+        row.insert(1, 'name', msg[0])
+        row.insert(2, 'industry', msg[1])
+        df = pd.concat([df, row], ignore_index=True)
+        df = df.sort_values(by='trade_date', ascending=False)
+        df = df.drop_duplicates(subset='trade_date', keep='first')
+        df.to_csv(dest_csv, index=False)
+
+    idx_rows = list(daily_quant_factor_temp_df.iterrows())
+    bar = tqdm.tqdm(total=all_stocks, desc='更新简版量化因子数据', unit='stock', ncols=100)
+    for i in range(0, all_stocks, step):
+        with ThreadPoolExecutor() as executor:
+            executor.map(update_daily_simple_quant_factor, idx_rows[i:i + step])
         bar.update(step)
     bar.close()
 
