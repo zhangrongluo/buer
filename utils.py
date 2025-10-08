@@ -868,7 +868,8 @@ def calculate_sharpe_ratio(
     sharpe_ratio = (return_mean - rf_daily) / return_std * (252 ** 0.5)  # 年化夏普比率
     return round(sharpe_ratio, 4)
 
-def get_all_gaps_statistic_infomation() -> pd.DataFrame | None:
+### 缺口统计相关函数
+def get_all_gaps_statistic_general_infomation() -> pd.DataFrame | None:
     """
     获取所有缺口的统计信息
     :return: DataFrame with statistics or None if no data
@@ -883,6 +884,10 @@ def get_all_gaps_statistic_infomation() -> pd.DataFrame | None:
     - up_gaps: 向上缺口数量
     - filled_up_gaps: 已回补的向上缺口数量
     - up_gaps_filled_rate: 向上缺口回补率
+    返回 DataFrame 格式如下(20250930数据):
+    | total_gaps | filled_gaps | gaps_filled_rate  | down_gaps | filled_down_gaps  | down_gaps_filled_rate | up_gaps | filled_up_gaps | up_gaps_filled_rate |
+    |------------|-------------|-------------------|-----------|-------------------|-----------------------|---------|----------------|---------------------|
+    | 530874     | 507351      | 0.9557            | 258177    | 250720            | 0.9711                | 272697  | 256631         | 0.9411              |
     """
     max_trade_days = dataset_group_cons['common'].get('MAX_TRADE_DAYS_LIST')
     if max_trade_days is None:
@@ -911,3 +916,119 @@ def get_all_gaps_statistic_infomation() -> pd.DataFrame | None:
     result['up_gaps_filled_rate'] = round(result['filled_up_gaps'] / result['up_gaps'], 4)
     result_df = pd.DataFrame([result])
     return result_df
+
+def get_gaps_earning_to_days_probability(
+        trade_days: int, gap: Literal['up', 'down'] = 'down',
+        rate0: float = 0.06, step: float = 0.02, times: int = 3
+) -> pd.DataFrame | None:
+    """
+    计算指定类型的缺口在小于 trade_days 时，涨幅大于 rate0序列的概率
+    : param trade_days: 交易天数
+    : param gap: 缺口类型
+    : param rate0: 起始涨幅
+    : param step: 涨幅步长
+    : param times: 涨幅步长次数
+    : return: 概率
+    NOTE:
+    例如: trade_days=60, gap='down', rate0=0.10, step=0.02, times=5
+    计算在所有向下缺口中, 60天内涨幅大于 10%、12%、14%、16%、18%的概率
+    返回 DataFrame 格式如下(20250930数据):
+    | trade_days | gap  | rate | count  | total  | probability |
+    |------------|------|------|--------|--------|-------------|
+    | 60         | down | 0.10 | 101261 | 211534 | 0.4789      |
+    | 60         | down | 0.12 |  81220 | 211534 | 0.3842      |
+    | 60         | down | 0.14 |  65145 | 211534 | 0.3079      |
+    | 60         | down | 0.16 |  52436 | 211534 | 0.2479      |
+    | 60         | down | 0.18 |  42149 | 211534 | 0.1992      |
+    """
+    max_trade_days = dataset_group_cons['common'].get('MAX_TRADE_DAYS_LIST')
+    if max_trade_days is None:
+        return
+    max_trade_days = max(max_trade_days)
+    all_gaps_csv = f'{TEMP_DIR}/downgap/max_trade_days_{int(max_trade_days)}/all_gap_data.csv'
+    if not os.path.exists(all_gaps_csv):
+        return
+    all_gaps_df = pd.read_csv(all_gaps_csv, dtype={'trade_date': str})
+    if all_gaps_df.empty:
+        return
+    if gap not in ['up', 'down']:
+        return
+    gap_df = all_gaps_df[all_gaps_df['gap'] == gap]
+    if gap_df.empty:
+        return
+    gap_df_0 = gap_df[gap_df['days'] <= trade_days]
+    if gap_df_0.empty:
+        return
+    # 返回 df 为多行格式，每一个涨幅对应一行
+    results = []
+    for i in range(times):
+        rate = rate0 + i * step
+        gap_df_1 = gap_df_0[gap_df_0['rise_percent'] >= rate]
+        count_1 = len(gap_df_1)
+        count_0 = len(gap_df_0)
+        probability = round(count_1 / count_0, 4) if count_0 != 0 else 0.0
+        results.append({
+            'trade_days': trade_days,
+            'gap': gap,
+            'rate': round(rate, 4),
+            'count': count_1,
+            'total': count_0,
+            'probability': probability
+        })
+    results_df = pd.DataFrame(results)
+    return results_df
+
+def get_gaps_agg_days_information_groupby_rate(
+        gap: Literal['up', 'down'] = 'down', 
+        rate0: float = 0.08, step: float = 0.01, times: int = 12
+) -> pd.DataFrame | None:
+    """
+    按照对缺口的 rise_percent 分组后统计 days 的信息
+    : param gap: 缺口类型
+    : param rate0: 起始涨幅
+    : param step: 涨幅步长
+    : param times: 涨幅步长次数
+    : return: DataFrame with grouped statistics or None if no data
+    NOTE:
+    - days 统计方法: count, mean, median, min, max, 
+    - 以下是rate0=0.05, step=0.05, times=5的输出, 返回 DataFrame 格式如下(20250930数据):
+    | rise_percent_group | count_days | mean_days | median_days | min_days | max_days |
+    |--------------------|------------|-----------|-------------|----------|----------|
+    | (0.00, 0.05]       |      47497 |  2.078468 |         1.0 |      1.0 |     68.0 |
+    | (0.05, 0.10]       |      63075 |  4.962901 |         3.0 |      1.0 |    146.0 |
+    | (0.10, 0.15]       |      38469 | 10.174634 |         6.0 |      1.0 |    171.0 |
+    | (0.15, 0.20]       |      21525 | 19.368595 |        13.0 |      1.0 |    395.0 |
+    | (0.20, 0.25]       |      17415 | 25.453000 |        17.0 |      1.0 |    572.0 |
+    | (0.25, ....]       |      62739 | 233.89735 |        81.0 |      1.0 |   4148.0 |    
+    """
+    max_trade_days = dataset_group_cons['common'].get('MAX_TRADE_DAYS_LIST')
+    if max_trade_days is None:
+        return
+    max_trade_days = max(max_trade_days)
+    all_gaps_csv = f'{TEMP_DIR}/downgap/max_trade_days_{int(max_trade_days)}/all_gap_data.csv'
+    if not os.path.exists(all_gaps_csv):
+        return
+    all_gaps_df = pd.read_csv(all_gaps_csv, dtype={'trade_date': str})
+    if all_gaps_df.empty:
+        return
+    if gap not in ['up', 'down']:
+        return
+    gap_df = all_gaps_df[all_gaps_df['gap'] == gap]
+    if gap_df.empty:
+        return
+    gap_df = gap_df.copy()
+    bins = [-float('inf')] + [round(rate0 + i * step, 4) for i in range(times)] + [float('inf')]
+    labels = []
+    for i in range(times + 1):
+        if i == 0:
+            labels.append(f'({0.00:.2f}, {bins[i+1]:.2f}]')
+        elif i == times:
+            labels.append(f'({bins[i]:.2f}, ....]')
+        else:
+            labels.append(f'({bins[i]:.2f}, {bins[i+1]:.2f}]')
+    gap_df['rise_percent_group'] = pd.cut(gap_df['rise_percent'], bins=bins, labels=labels)
+    grouped = gap_df.groupby('rise_percent_group')['days'].agg(['count', 'mean', 'median', 'min', 'max'])
+    new_columns = ['count_days', 'mean_days', 'median_days', 'min_days', 'max_days']
+    grouped.columns = new_columns
+    grouped = grouped.reset_index()
+    return grouped

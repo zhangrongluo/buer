@@ -12,8 +12,9 @@ from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
-from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indicator, download_all_dividend_data, update_all_adj_factor_data,
-                                    download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, download_all_stocks_daily_temp_indicator_data)
+from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indicator, update_all_daily_simple_quant_factor, update_all_adj_factor_data,
+                                    download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, 
+                                    download_all_stocks_daily_temp_indicator_data, download_all_stocks_daily_simple_temp_quant_factor)
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, clear_buy_in_list
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_CSV, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
@@ -448,8 +449,10 @@ def update_trade_cal_and_stock_list():
 def update_daily_data_and_indicator():
     download_all_stocks_daily_temp_data()
     download_all_stocks_daily_temp_indicator_data()
+    download_all_stocks_daily_simple_temp_quant_factor()
     update_all_daily_data(step=5)
     update_all_daily_indicator(step=5)
+    update_all_daily_simple_quant_factor(step=5)
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 行情和指标数据更新完成！')
 
