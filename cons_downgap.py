@@ -9,6 +9,7 @@ dataset_group_cons = {
     'group_50': {
         'MODEL_NAME': 'DownGap >>> 50',  # 模型名称
         'MAX_TRADE_DAYS': 50,  # group_id, 最大缺口回补天数，即最大持有天数(不含今日),影响训练集的长度
+        'EXTRA_TRADE_DAYS': 10,  # 额外交易天数
         'TEST_DATASET_PERCENT': 0.20,  # 测试集占训练集的比例
         'TRADE_COVERAGE_DAYS': 30,  # 即买入清单中记录的保留天数，即买入观察天数(不含今日)，影响交易集的长度
         'MIN_PRED_RATE': 0.15,  # 预期收益率下限，用于筛选交易数据集，低于此收益率的数据集不列入交易清单
@@ -33,6 +34,7 @@ dataset_group_cons = {
     'group_45': {
         'MODEL_NAME': 'DownGap >>> 45',  # 模型名称
         'MAX_TRADE_DAYS': 45,
+        'EXTRA_TRADE_DAYS': 15,
         'TEST_DATASET_PERCENT': 0.20,
         'TRADE_COVERAGE_DAYS': 25,
         'MIN_PRED_RATE': 0.135,
@@ -57,12 +59,13 @@ dataset_group_cons = {
     'group_60': {
         'MODEL_NAME': 'DownGap >>> 60',  # 模型名称
         'MAX_TRADE_DAYS': 60,
+        'EXTRA_TRADE_DAYS': 0,
         'TEST_DATASET_PERCENT': 0.20,
         'TRADE_COVERAGE_DAYS': 30,
         'MIN_PRED_RATE': 0.15,
         'PRED_RATE_PCT': 1,
         'SHUFFLE': False,
-        'MAX_STOCKS': 45,
+        'MAX_STOCKS': 50,
         'ONE_TIME_FUNDS': 60000,
         'PRED_MODELS': 6,
         'train_times': 24,  # 训练次数
@@ -83,7 +86,7 @@ dataset_group_cons = {
         'MIN_STOCK_PRICE': 2.88,
         'PAUSE': 0.5,
         'additionl_rate': 0.02,
-        'exception_list': ['退市', '退', 'PT', 'ST', '聚灿光电'],
+        'exception_list': ['退市', '退', 'PT', 'ST', '中环环保'],
         'MAX_TRADE_DAYS_LIST': [50, 45, 60],  # 最大交易天数列表
     }
 }

@@ -12,6 +12,9 @@ downgap_profit_csv_45 = 'trade/downgap/max_trade_days_45/daily_profit.csv'
 downgap_hd_csv_50 = 'trade/downgap/max_trade_days_50/holding_list.csv'
 downgap_indicator_csv_50 = 'trade/downgap/max_trade_days_50/statistic_indicator.csv'
 downgap_profit_csv_50 = 'trade/downgap/max_trade_days_50/daily_profit.csv'
+downgap_hd_csv_60 = 'trade/downgap/max_trade_days_60/holding_list.csv'
+downgap_indicator_csv_60 = 'trade/downgap/max_trade_days_60/statistic_indicator.csv'
+downgap_profit_csv_60 = 'trade/downgap/max_trade_days_60/daily_profit.csv'
 rf_rate = 0.016  # 无风险利率
 
 class MainFrame(wx.Frame):
@@ -111,6 +114,23 @@ class MainFrame(wx.Frame):
         downgap50_label.Bind(wx.EVT_LEFT_DOWN, self.on_downgap50_click)
         
         left_sizer.Add(downgap50_panel, 0, wx.TOP|wx.EXPAND, 20)
+        
+        # 菜单项：Downgap >>> 60策略
+        downgap60_panel = wx.Panel(left_panel, size=(180, 36))
+        downgap60_panel.SetBackgroundColour(wx.Colour(245, 245, 245))
+        
+        downgap60_label = wx.StaticText(downgap60_panel, label="Downgap >>> 60策略", pos=(20, 12))
+        downgap60_label.SetFont(wx.Font(14, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        
+        # 绑定鼠标事件
+        downgap60_panel.Bind(wx.EVT_ENTER_WINDOW, self.on_downgap60_enter)
+        downgap60_panel.Bind(wx.EVT_LEAVE_WINDOW, self.on_downgap60_leave)
+        downgap60_panel.Bind(wx.EVT_LEFT_DOWN, self.on_downgap60_click)
+        downgap60_label.Bind(wx.EVT_ENTER_WINDOW, self.on_downgap60_enter)
+        downgap60_label.Bind(wx.EVT_LEAVE_WINDOW, self.on_downgap60_leave)
+        downgap60_label.Bind(wx.EVT_LEFT_DOWN, self.on_downgap60_click)
+        
+        left_sizer.Add(downgap60_panel, 0, wx.TOP|wx.EXPAND, 20)
         left_panel.SetSizer(left_sizer)
         
         # 右侧显示区域
@@ -245,6 +265,22 @@ class MainFrame(wx.Frame):
     
     def on_downgap50_leave(self, event):
         """鼠标离开downgap50菜单项时的处理"""
+        panel = event.GetEventObject()
+        if isinstance(panel, wx.StaticText):
+            panel = panel.GetParent()
+        panel.SetBackgroundColour(wx.Colour(245, 245, 245))
+        panel.Refresh()
+    
+    def on_downgap60_enter(self, event):
+        """鼠标进入downgap60菜单项时的处理"""
+        panel = event.GetEventObject()
+        if isinstance(panel, wx.StaticText):
+            panel = panel.GetParent()
+        panel.SetBackgroundColour(wx.Colour(220, 220, 220))
+        panel.Refresh()
+    
+    def on_downgap60_leave(self, event):
+        """鼠标离开downgap60菜单项时的处理"""
         panel = event.GetEventObject()
         if isinstance(panel, wx.StaticText):
             panel = panel.GetParent()
@@ -432,6 +468,9 @@ class MainFrame(wx.Frame):
                                     sharpe_ratio_text = f"夏普比率: {sharpe_ratio:.4f}"
                                 elif csv_file == downgap_hd_csv_50:
                                     sharpe_ratio = calculate_sharpe_ratio('downgap', rf_rate, max_trade_days=50)
+                                    sharpe_ratio_text = f"夏普比率: {sharpe_ratio:.4f}"
+                                elif csv_file == downgap_hd_csv_60:
+                                    sharpe_ratio = calculate_sharpe_ratio('downgap', rf_rate, max_trade_days=60)
                                     sharpe_ratio_text = f"夏普比率: {sharpe_ratio:.4f}"
                             except Exception as sharpe_e:
                                 print(f"计算夏普比率出错: {sharpe_e}")
@@ -624,6 +663,11 @@ class MainFrame(wx.Frame):
         """点击downgap50策略菜单项时的处理"""
         self.SetTitle("股票清单和策略指标 - Downgap >>> 50策略")
         self.load_csv_content(downgap_hd_csv_50, downgap_indicator_csv_50, downgap_profit_csv_50)
+    
+    def on_downgap60_click(self, event):
+        """点击downgap60策略菜单项时的处理"""
+        self.SetTitle("股票清单和策略指标 - Downgap >>> 60策略")
+        self.load_csv_content(downgap_hd_csv_60, downgap_indicator_csv_60, downgap_profit_csv_60)
 
 class StockApp(wx.App):
     def OnInit(self):

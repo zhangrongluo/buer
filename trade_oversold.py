@@ -368,7 +368,12 @@ def scan_buy_in_list():
         idx_rows_batch = idx_rows[start:end]
         # 使用线程池执行多线程扫描  
         with ThreadPoolExecutor() as executor:
-            executor.map(scan_buy_in_list_row, idx_rows_batch)
+            futures = [executor.submit(scan_buy_in_list_row, idx_row) for idx_row in idx_rows_batch]
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f'({MODEL_NAME}) scan_buy_in_list_row error: {e}')
 
 # 持续刷新holding_list.csv
 def refresh_holding_list():
@@ -450,7 +455,12 @@ def refresh_holding_list():
         idx_rows_batch = idx_rows[start:end]
         # 使用线程池执行多线程刷新
         with ThreadPoolExecutor() as executor:
-            executor.map(refresh_holding_list_row, idx_rows_batch)
+            futures = [executor.submit(refresh_holding_list_row, idx_row) for idx_row in idx_rows_batch]
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f'({MODEL_NAME}) refresh_holding_list_row error: {e}')
     with lock:
         holding_df.to_csv(HOLDING_LIST, index=False)
 
@@ -533,7 +543,12 @@ def scan_holding_list():
         idx_rows_batch = idx_rows[start:end]
         # 使用线程池执行多线程扫描
         with ThreadPoolExecutor() as executor:
-            executor.map(scan_holding_list_row, idx_rows_batch)
+            futures = [executor.submit(scan_holding_list_row, idx_row) for idx_row in idx_rows_batch]
+            for future in futures:
+                try:
+                    future.result()
+                except Exception as e:
+                    print(f'({MODEL_NAME}) scan_holding_list_row error: {e}')
 
 def clear_buy_in_list(tolerance: float = 0.95) -> pd.DataFrame | None:
     """
@@ -908,4 +923,8 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         shutil.rmtree(f'{trade_dir}_copy')
 
 if __name__ == '__main__':
+    import time
+    start = time.time()
     trade_process(mode='test')  # or mode='trade' for actual trading
+    end = time.time()
+    print(f'Execution time: {end - start:.2f} seconds')

@@ -3,6 +3,8 @@ import re
 import time
 import json
 import pandas as pd
+import aiohttp
+import asyncio
 import datetime
 import requests
 import tushare as ts
@@ -12,7 +14,6 @@ from basic_data_alt_edition import download_dividend_data_in_multi_ways
 from cons_general import TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, TEMP_DIR
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
-from cons_hidden import xq_a_token
 
 
 # send wechat message
@@ -26,6 +27,28 @@ def send_wechat_message_via_bark(device_key, title, message):
     """
     url = f"https://api.day.app/{device_key}/{title}/{message}"
     response = requests.get(url).json()
+    return response
+
+def send_wechat_message_via_pushover(user_key, app_token, title, message):
+    """
+    send wechat message via pushover
+    :param user_key: pushover user key
+    :param app_token: pushover app token
+    :param title: message title
+    :param message: message content
+    :return: response
+    NOTE:
+    backup method when bark not works, 10000 messages/month free
+    need to feed for more messages
+    """
+    url = "https://api.pushover.net/1/messages.json"
+    data = {
+        "token": app_token,
+        "user": user_key,
+        "title": title,
+        "message": message
+    }
+    response = requests.post(url, data=data).json()
     return response
 
 def get_stock_price_from_sina(code: str) -> float | None:
@@ -80,6 +103,55 @@ def get_stock_price_from_tencent(code: str) -> float | None:
     except Exception as e:
         return None
     
+async def async_get_stock_price_from_tencent(code: str) -> float | None:
+    """
+    get stock realtime price from tencent finance using asyncio
+    :param code: stock code, like 000001 or 000001.SH
+    :return: realtime stock price
+    NOTE: 
+    Async version of get_stock_price_from_tencent
+    """
+    stock_code = code[:6]
+    stock_code = 'sh' + stock_code if code[0] == '6' else 'sz' + stock_code
+    try:
+        url = f"https://qt.gtimg.cn/q={stock_code}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
+                (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=5) as response:
+                response.raise_for_status()  # 检查请求是否成功
+                # 解析数据腾讯财经返回的数据,格式:v_sh600036="1~招商银行~600036~40.74...";
+                data = await response.text()
+                if not data or "v_" not in data:
+                    return None
+                data_content = data.split("=")[1]
+                data_list = data_content.split("~")
+                price = data_list[3]  # realtime price
+                price = float(price)
+                return price
+    except Exception as e:
+        return None
+
+async def get_all_prices_async(ts_codes: list[str]) -> dict[str, float | None]:
+    """
+    异步并发获取多个股票股价
+    :param ts_codes: 股票代码列表, 如 ['000001.SZ', '600000.SH']
+    :return: 字典, 股票代码为键, 实时价格为值
+    NOTE:
+    采用腾讯财经接口单渠道获取股票价格
+    """
+    tasks = [async_get_stock_price_from_tencent(code) for code in ts_codes]
+    prices = await asyncio.gather(*tasks, return_exceptions=True)
+    results = {}
+    for code, price in zip(ts_codes, prices):
+        if isinstance(price, Exception):
+            results[code] = None
+        else:
+            results[code] = price
+    return results
+    
 def get_stock_realtime_price(code: str) -> float | None:
     """
     采用多重模式获取股票实时交易价格
@@ -99,7 +171,7 @@ def get_stock_realtime_price(code: str) -> float | None:
         time.sleep(PAUSE)
     return price_now
 
-def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=10) -> pd.DataFrame:
+def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.DataFrame:
     """
     获取新浪财经今日历史实时价格数据(分钟数据)
     :param code: 股票代码, 如 000001 或 000001.SZ, 要转换为 sh600000 或 sz000001 格式
@@ -132,11 +204,12 @@ def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=10) -> pd.Dat
         print(f'获取新浪数据失败:{response.status_code},请检查 token 设置、网络连接或是否为交易日')
     return res_df
 
-def get_history_realtime_price_DF_from_dc(code, klt=1, datalen=10) -> pd.DataFrame:
+def get_history_realtime_price_DF_from_dc(code, klt=1, datalen=15) -> pd.DataFrame:
     """
     从东方财富获取股票分钟级别价格数据
     :param code: 股票代码, 000001或者000001.SZ, 需转化成 sz000001 或则sh600000 格式
     :param klt: K线周期, 1(1分钟)、5(5分钟)、15(15分钟)、30(30分钟)、60(60分钟)
+    :param datalen: 返回的数据节点数量
     :return: DataFrame   
     NOTE:
     written by Grok, 参数详细说明见 https://www.sanrenjz.com/2023/03/31/
@@ -330,6 +403,8 @@ def get_up_down_limit(code: str) -> tuple[float, float, float]:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
     today = datetime.datetime.now().strftime('%Y%m%d')
     up_down_df = pd.read_csv(UP_DOWN_LIMIT_CSV, dtype={'trade_date': str})
+    if up_down_df.empty:
+        return None, None, None
     if up_down_df['trade_date'].iloc[0] != today:
         return None, None, None
     res_df = up_down_df[up_down_df['ts_code'] == code]
@@ -584,18 +659,18 @@ def calculate_omega_ratio(
             )
         max_trade_days = int(max_trade_days)
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
-    profit_csv = f'{trade_root}/daily_profit.csv'
-    if not os.path.exists(profit_csv):
+    holding_csv = f'{trade_root}/holding_list.csv'
+    if not os.path.exists(holding_csv):
         return 0.0
-    profit_df = pd.read_csv(profit_csv, dtype={'trade_date': str})
+    holding_df = pd.read_csv(holding_csv, dtype={'date_in': str, 'date_out': str})
     if start is not None:
-        profit_df = profit_df[profit_df['trade_date'] >= start]
+        holding_df = holding_df[holding_df['date_out'] >= start]
     if end is not None:
-        profit_df = profit_df[profit_df['trade_date'] <= end]
-    if profit_df.empty:
-        return 0.0
-    total_profit = profit_df[profit_df['delta'] > 0]['delta'].sum()
-    total_loss = -profit_df[profit_df['delta'] < 0]['delta'].sum()
+        holding_df = holding_df[holding_df['date_out'] <= end]
+    loss_df = holding_df[holding_df['profit'] < 0]
+    profit_df = holding_df[holding_df['profit'] >= 0]
+    total_loss = -loss_df['profit'].sum()
+    total_profit = profit_df['profit'].sum()
     if total_loss == 0:
         return 0.0
     return total_profit / total_loss if total_loss != 0 else 0.0

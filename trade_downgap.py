@@ -6,10 +6,10 @@ import logging
 from typing import Literal
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
-from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR, TEST_DIR
+from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR, TEST_DIR, TRADE_CAL_CSV
 from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
-from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not,
+from utils import (send_wechat_message_via_bark, get_stock_realtime_price, get_all_prices_async, is_trade_date_or_not,
                    get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not,
                    get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, early_sell_standard_downgap)
 from stocklist import get_name_and_industry_by_code
@@ -81,6 +81,8 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: 
     if len(code) != 9:
         code = code +'.SH' if code.startswith('6') else code + '.SZ'
     msg = get_name_and_industry_by_code(code)
+    if msg is None:
+        return
     stock_name = msg[0]
     industry = msg[1]
     pattern = re.compile(r'[*]?[sS][tT]|退市|退|[pP][Tt]')  # 例外股票，不投
@@ -110,6 +112,9 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: 
                 'target_price', 'price_in', 'price_out', 'price_now', 'amount', 'cost_fee', 'profit', 'rate_pred', 'rate_pct',
                 'rate_current', 'rate_yearly', 'status']
     new_row = pd.DataFrame([row_data, ], columns=column)
+    if price is None or cost_fee is None or amount is None:
+        print(f"Warning: Invalid buy_in parameters - price={price}, cost_fee={cost_fee}, amount={amount}")
+        return
     # adjust stock number signal and cash amount
     cash_amount_buy = round(price * (1 + cost_fee) * amount, 2)
     note = f'买入 {code} {stock_name} at {price} total {amount}'
@@ -214,6 +219,9 @@ def calculate_buy_in_amount(funds, price) -> int | None:
     :return: buy_in amount
     """
     COST_FEE = dataset_group_cons['common'].get('COST_FEE')
+    if funds is None or price is None or price <= 0:
+        print(f"Warning: Invalid parameters - funds={funds}, price={price}")
+        return 0
     amount = int(funds*(1-COST_FEE) / price)
     amount = amount // 100 * 100
     return amount
@@ -343,6 +351,9 @@ def scan_buy_in_list(max_trade_days:int):
     buy_in_df = pd.DataFrame(rows_not_holding)
     buy_in_df = buy_in_df.sort_values(by='trade_date', ascending=True)
     buy_in_df = buy_in_df.reset_index(drop=True)
+    # 异步获取全部股票的实时价格备用
+    # ts_codes = buy_in_df['ts_code'].tolist()
+    # prices_dict = asyncio.run(get_all_prices_async(ts_codes))
 
     def calculate_gaps_buy_in_points(code: str) -> float | None:
         """
@@ -374,11 +385,17 @@ def scan_buy_in_list(max_trade_days:int):
         elif len(gaps_list) == 1:
             traget_price = gaps_list[0]['target_price']
             pred = gaps_list[0]['pred']
+            if traget_price is None or pred is None:
+                return None
             p = traget_price / (1 + pred)
             return p
         elif len(gaps_list) == 2:
             target_price1 = gaps_list[0]['target_price']
             pred1 = gaps_list[0]['pred']
+            target_price2 = gaps_list[1]['target_price']
+            pred2 = gaps_list[1]['pred']
+            if None in [target_price1, pred1, target_price2, pred2]:
+                return None
             p1 = target_price1 / (1 + pred1)  # 买点1
             pct_chg1 = gaps_list[0]['pct_chg']
             target_price2 = gaps_list[1]['target_price']
@@ -392,14 +409,16 @@ def scan_buy_in_list(max_trade_days:int):
         elif len(gaps_list) == 3:
             target_price1 = gaps_list[0]['target_price']
             pred1 = gaps_list[0]['pred']
-            p1 = target_price1 / (1 + pred1)  # 买点1
-            pct_chg1 = gaps_list[0]['pct_chg']
             target_price2 = gaps_list[1]['target_price']
             pred2 = gaps_list[1]['pred']
-            p2 = target_price2 / (1 + pred2)  # 买点2
-            pct_chg2 = gaps_list[1]['pct_chg']
             target_price3 = gaps_list[2]['target_price']
             pred3 = gaps_list[2]['pred']
+            if None in [target_price1, pred1, target_price2, pred2, target_price3, pred3]:
+                return None
+            p1 = target_price1 / (1 + pred1)  # 买点1
+            pct_chg1 = gaps_list[0]['pct_chg']
+            p2 = target_price2 / (1 + pred2)  # 买点2
+            pct_chg2 = gaps_list[1]['pct_chg']
             p3 = target_price3 / (1 + pred3)  # 买点3
             pct_chg3 = gaps_list[2]['pct_chg']
             p_down_limit = target_price3 * 0.9 * 0.9  # 缺口3的跌停价
@@ -417,6 +436,7 @@ def scan_buy_in_list(max_trade_days:int):
         target_price = row['target_price']
         pred = row['pred']
         pct_chg = row['pct_chg']
+        # price_now = prices_dict.get(code)
         price_now = get_stock_realtime_price(code)
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
         if price_now is None:
@@ -448,6 +468,10 @@ def scan_buy_in_list(max_trade_days:int):
                 return
             amount = calculate_buy_in_amount(funds=buy_in_amount/stock_nums, price=price_now)
         else:  # 只有一个缺口
+            # 检查必需参数
+            if target_price is None or PRED_RATE_PCT is None:
+                print(f"Warning: Invalid parameters - target_price={target_price}, PRED_RATE_PCT={PRED_RATE_PCT}")
+                return
             pred_now = (target_price - price_now) / price_now  # 以现价买入后回补缺口的预期收益率
             if pred_now < pred * PRED_RATE_PCT:
                 return
@@ -455,12 +479,16 @@ def scan_buy_in_list(max_trade_days:int):
             # 会比当前缺口的买点更低,故不能以当前缺口的买点成交。此时采用强制提高收益率的方式
             # （即人为设定更低的买点）阻止交易,等待第二个较大的缺口出现。
             up_limit_rate = get_up_down_limit(code=code)[2]
-            pct = 0.95
-            pred_2_down_limit = 1/(1-up_limit_rate*pct)**2 -1  # 连续 2 个跌停后回补的最低收益率
-            if pct_chg <= -up_limit_rate * pct and pred >= pred_2_down_limit:
-                if pred_now < pred + additionl_rate:
-                    return
-            amount = calculate_buy_in_amount(funds=buy_in_amount, price=price_now)
+            if up_limit_rate is None:
+                # 如果无法获取涨跌停幅度，跳过这个特殊判断
+                amount = calculate_buy_in_amount(funds=buy_in_amount, price=price_now)
+            else:
+                pct = 0.95
+                pred_2_down_limit = 1/(1-up_limit_rate*pct)**2 -1  # 连续 2 个跌停后回补的最低收益率
+                if pct_chg <= -up_limit_rate * pct and pred >= pred_2_down_limit:
+                    if pred_now < pred + additionl_rate:
+                        return
+                amount = calculate_buy_in_amount(funds=buy_in_amount, price=price_now)
         if amount == 0:
             return
         with lock:
@@ -472,7 +500,12 @@ def scan_buy_in_list(max_trade_days:int):
     # 多线程扫描buy_in_list.csv
     idx_rows = list(buy_in_df.iterrows())
     with ThreadPoolExecutor() as executor:
-        executor.map(scan_buy_in_list_row, idx_rows)
+        futures = [executor.submit(scan_buy_in_list_row, idx_row) for idx_row in idx_rows]
+        for future in futures:
+            try:
+                future.result()
+            except Exception as e:
+                print(f'({MODEL_NAME}) scan_buy_in_list_row error: {e}')
 
 # 持续刷新holding_list.csv
 def refresh_holding_list(max_trade_days: int):
@@ -496,6 +529,9 @@ def refresh_holding_list(max_trade_days: int):
         holding_df['fill_date'] = holding_df['fill_date'].apply(lambda x: x if x != 'nan' else '')
         holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
         holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
+        # # 异步获取全部股票的实时价格备用
+        # ts_codes = holding_df['ts_code'].tolist()
+        # prices_dict = asyncio.run(get_all_prices_async(ts_codes))
 
     def refresh_holding_list_row(idx_row):
         """
@@ -556,6 +592,7 @@ def refresh_holding_list(max_trade_days: int):
                     days = abs(today_index - trade_date_index) + 1  # today还未收盘，未在daily_df中，所以+1
                 row['days'] = days
                 # price_now, profit, rate_current, rate_yearly
+                # price_now = prices_dict.get(row['ts_code'])
                 price_now = get_stock_realtime_price(row['ts_code'])
                 print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
                 if price_now is None:
@@ -583,8 +620,13 @@ def refresh_holding_list(max_trade_days: int):
     idx_rows = list(holding_df.iterrows())
     results = []
     with ThreadPoolExecutor() as executor:
-        for res in executor.map(refresh_holding_list_row, idx_rows):
-            results.append(res)
+        futures = [executor.submit(refresh_holding_list_row, idx_row) for idx_row in idx_rows]
+        for future in futures:
+            try:
+                res = future.result()
+                results.append(res)
+            except Exception as e:
+                print(f'({MODEL_NAME}) refresh_holding_list_row error: {e}')
     # 合并结果
     for i, updated_row in results:
         for col in holding_df.columns:
@@ -603,6 +645,7 @@ def scan_holding_list(max_trade_days: int):
         if str(int(max_trade_days)) in group:
             HOLDING_LIST = dataset_group_cons[group].get('HOLDING_LIST')
             MAX_TRADE_DAYS = dataset_group_cons[group].get('MAX_TRADE_DAYS')
+            EXTRA_TRADE_DAYS = dataset_group_cons[group].get('EXTRA_TRADE_DAYS')
             MODEL_NAME = dataset_group_cons[group].get('MODEL_NAME')
             TRADE_LOG = dataset_group_cons[group].get('TRADE_LOG')
             break
@@ -618,6 +661,9 @@ def scan_holding_list(max_trade_days: int):
         holding_df['fill_date'] = holding_df['fill_date'].apply(lambda x: x if x != 'nan' else '')
         holding_df['date_out'] = holding_df['date_out'].apply(lambda x: str(x)[:8])
         holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
+        # # 异步获取全部股票的实时价格备用
+        # ts_codes = holding_df['ts_code'].tolist()
+        # prices_dict = asyncio.run(get_all_prices_async(ts_codes))
     
     def scan_holding_list_row(idx_row):
         i, row = idx_row
@@ -631,6 +677,7 @@ def scan_holding_list(max_trade_days: int):
         holding_days = row['holding_days']
         if holding_days == 1:
             return
+        # price_now = prices_dict.get(ts_code)
         price_now = get_stock_realtime_price(ts_code)
         print(f'({MODEL_NAME}) {ts_code} {stock_name} price_now: {price_now}')
         if price_now is None:
@@ -655,14 +702,18 @@ def scan_holding_list(max_trade_days: int):
             return
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
+        rate_current = row['rate_current']
         if days >= MAX_TRADE_DAYS:
+            # 到期亏损，延期一次
+            max_days = MAX_TRADE_DAYS + EXTRA_TRADE_DAYS
+            if days < max_days and rate_current <= 0:
+                return
             with lock:
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
             msg = f'卖出 {ts_code} {stock_name}: days > {MAX_TRADE_DAYS}'
             trade_log.info(msg)
             return
         # if rate_yearly >= 3.0 and holding_days >= 10, sell out in advance
-        rate_current = row['rate_current']
         rate_yearly = row['rate_yearly']
         early_or_not =  early_sell_standard_downgap(holding_days, rate_current, rate_yearly)
         if early_or_not:
@@ -674,7 +725,12 @@ def scan_holding_list(max_trade_days: int):
     # 多线程扫描holding_list.csv
     idx_rows = list(holding_df.iterrows())
     with ThreadPoolExecutor() as executor:
-        executor.map(scan_holding_list_row, idx_rows)
+        futures = [executor.submit(scan_holding_list_row, idx_row) for idx_row in idx_rows]
+        for future in futures:
+            try:
+                future.result()
+            except Exception as e:
+                print(f'({MODEL_NAME}) scan_holding_list_row error: {e}')
 
 def XD_buy_in_list_bak(max_trade_days: int):
     """
@@ -973,6 +1029,12 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
     if mode not in ['trade', 'test']:
         print(f'Invalid mode: {mode}. Use "trade" or "test".')
         return
+    
+    def is_within_trade_date():
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        cal_df = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
+        cal_df = cal_df[cal_df['is_open'] == 1]
+        return today in cal_df['cal_date'].values
 
     def is_within_trading_hours():
         now = datetime.datetime.now().time()
@@ -991,9 +1053,9 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
         if mode == 'test':
             refresh_holding_list(max_trade_days=max_trade_days)
 
-    if mode == 'trade' and is_within_trading_hours():
+    if mode == 'trade' and is_within_trading_hours() and is_within_trade_date():
         one_trade_loop(max_trade_days=max_trade_days, mode=mode)
-    if mode == 'test' and not is_within_trading_hours():
+    if mode == 'test' and (not is_within_trade_date() or not is_within_trading_hours()):
         import shutil
         trade_dir = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
         shutil.copytree(trade_dir, f'{trade_dir}_test_copy', dirs_exist_ok=True)  # 备份交易数据
@@ -1013,4 +1075,8 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
 
 
 if __name__ == '__main__':
-    trade_process(max_trade_days=50, mode='test')
+    import time
+    start = time.time()
+    trade_process(max_trade_days=60, mode='test')
+    end = time.time()
+    print(f'Trade process completed in {end - start:.2f} seconds.')

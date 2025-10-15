@@ -19,6 +19,7 @@
 #### 参数说明:
 ##### DownGap模型由以下参数来控制：
 - MAX_TRADE_DAYS：最大交易天数，它和缺口回补天数是同一个数据。在股票进入了holding_list.csv后，该参数决定了股票最大的持有交易天数（等于MAX_TRADE_DAYS-缺口已经持续的日期）。该参数是以交易日历天数（非自然日历天数）来计算的。在确定训练集的时候，该参数是一个筛选因素，只有缺口回补天数小于等于该参数的数据，才会选入训练数据集。
+- EXTRA_TRADE_DAYS: 额外交易天数，当股票交易日历days达到 max_trade_days上限但当前收益仍为负数时，延长days至extra_trade_days+ max_trade_days。在延长期内，当延期内收益转正，即卖出。延长期到期收益仍为负，卖出。这个参数可以增加灵活性，以较少组别的 downgap数据集产生更多的交易期限类型。举例来说，当持仓准备在 90 个交易日卖出时，原先需要通过训练 90 天的 downgap 数据集来实现，现在也可以通过训练 60 天的数据集，同时设置extra_trade_days=30 来实现，或则通过训练 45 天的数据集，同时设置extra_trade_days=45 来实现。
 - TRADE_COVERAGE_DAYS：从今日向前计算的交易天数。一个缺口生成后，它在trade_pred.csv和buy_in_list.csv文件中流转的最大天数。在确定交易集的时候，该参数是一个筛选因素，即缺口基准日 trade_date 距离今日的交易天数小于等于该参数，才会选入交易集。一旦超过该日期后，缺口系统不再将该缺口列入trade_pred.csv和buy_in_list.csv，不再跟踪该缺口。和MAX_TRADE_DAYS一样，该参数是以交易日历天数（非自然日历天数）来计算的。
 - TEST_DATASET_PERCENT：测试数据集占训练数据集的比重。
 - MIN_PRED_RATE：最低预期收益率，在确定buy_in_list.csv清单时，该参数是一个筛选因素。只用当trade_pred.csv文件中缺口预期收益率大于该参数时，才能入选buy_in_list.csv文件。

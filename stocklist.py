@@ -49,7 +49,7 @@ def load_list_df():
 
 load_list_df()
 
-def get_name_and_industry_by_code(ts_code: str) -> str|None:
+def get_name_and_industry_by_code(ts_code: str) -> list | None:
     """
     get stock name by ts_code in the LIST_DF
     :params ts_code: 600036.SH or 600036
