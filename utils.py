@@ -402,7 +402,14 @@ def get_up_down_limit(code: str) -> tuple[float, float, float]:
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
     today = datetime.datetime.now().strftime('%Y%m%d')
+    if not os.path.exists(UP_DOWN_LIMIT_CSV):
+        from stocklist import get_up_down_limit_list
+        get_up_down_limit_list()
     up_down_df = pd.read_csv(UP_DOWN_LIMIT_CSV, dtype={'trade_date': str})
+    if up_down_df.empty:
+        from stocklist import get_up_down_limit_list
+        get_up_down_limit_list()
+        up_down_df = pd.read_csv(UP_DOWN_LIMIT_CSV, dtype={'trade_date': str})
     if up_down_df.empty:
         return None, None, None
     if up_down_df['trade_date'].iloc[0] != today:
@@ -424,24 +431,25 @@ def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_ye
     :param rate_yearly: 年化收益率
     :return: True if should sell, False otherwise
     NOTE:
-    holding_days < 15 and rate_current >= 0.30
-    30 > holding_days >= 15 and rate_yearly >= 4.46
-    60 > holding_days >= 30 and rate_yearly >= 2.63
-    90 > holding_days >= 60 and rate_yearly >= 1.83
+    holding_days < 15 and rate_current >= 0.25
+    30 > holding_days >= 15 and rate_yearly >= 3.65
+    60 > holding_days >= 30 and rate_yearly >= 2.23
+    90 > holding_days >= 60 and rate_yearly >= 1.58
     rate_yearly 按照年 365 天计算
-    4.46 = 365/((15+30)/2)*((0.25+0.30)/2)
-    2.63 = 365/((30+60)/2)*((0.30+0.35)/2)
-    1.83 = 365/((60+90)/2)*((0.35+0.40)/2)
+    3.65 = 365/((15+30)/2)*((0.20+0.25)/2)
+    2.23 = 365/((30+60)/2)*((0.25+0.30)/2)
+    1.58 = 365/((60+90)/2)*((0.30+0.35)/2)
     """
-    if holding_days < 15 and rate_current >= 0.30:
+    if holding_days < 15 and rate_current >= 0.25:
         return True
-    elif 15 <= holding_days < 30 and rate_yearly >= 4.46:
+    elif 15 <= holding_days < 30 and rate_yearly >= 3.65:
         return True
-    elif 30 <= holding_days < 60 and rate_yearly >= 2.63:
+    elif 30 <= holding_days < 60 and rate_yearly >= 2.23:
         return True
-    elif 60 <= holding_days < 90 and rate_yearly >= 1.83:
+    elif 60 <= holding_days < 90 and rate_yearly >= 1.58:
         return True
-    return False
+    else:
+        return False
 
 def early_sell_standard_downgap(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
     """
@@ -454,11 +462,12 @@ def early_sell_standard_downgap(holding_days: int, rate_current: float, rate_yea
     rate_yearly 按照年 365 天计算
     3.65 = 365/((10+20)/2)*((0.12+0.18)/2)
     """
-    if holding_days < 10 and rate_current >= 0.15:
+    if holding_days < 10 and rate_current >= 0.12:
         return True
     elif 10 <= holding_days < 20 and rate_yearly >= 3.65:
         return True
-    return False
+    else:
+        return False
 
 def is_rising_or_not(code, price_now: float, method: Literal['max', 'mean'] = 'mean') -> bool:
     """
@@ -525,11 +534,18 @@ def is_suspended_or_not(code: str) -> bool:
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
-    if not os.path.exists(SUSPEND_STOCK_CSV):
-        return False
     if not is_trade_date_or_not():
         return False
+    if not os.path.exists(SUSPEND_STOCK_CSV):
+        from stocklist import get_suspend_stock_list
+        get_suspend_stock_list()
     suspend_df = pd.read_csv(SUSPEND_STOCK_CSV, dtype={'ts_code': str})
+    if suspend_df.empty:
+        from stocklist import get_suspend_stock_list
+        get_suspend_stock_list()
+        suspend_df = pd.read_csv(SUSPEND_STOCK_CSV, dtype={'ts_code': str})
+    if suspend_df.empty:
+        return False
     return code in suspend_df['ts_code'].values
 
 ### statistics functions
@@ -1065,16 +1081,16 @@ def get_gaps_agg_days_information_groupby_rate(
     : param times: 涨幅步长次数
     : return: DataFrame with grouped statistics or None if no data
     NOTE:
-    - days 统计方法: count, mean, median, min, max, 
+    - days 统计方法: count, mean, median, min, max, quantile(0.75), quantile(0.90)
     - 以下是rate0=0.05, step=0.05, times=5的输出, 返回 DataFrame 格式如下(20250930数据):
-    | rise_percent_group | count_days | mean_days | median_days | min_days | max_days |
-    |--------------------|------------|-----------|-------------|----------|----------|
-    | (0.00, 0.05]       |      47497 |  2.078468 |         1.0 |      1.0 |     68.0 |
-    | (0.05, 0.10]       |      63075 |  4.962901 |         3.0 |      1.0 |    146.0 |
-    | (0.10, 0.15]       |      38469 | 10.174634 |         6.0 |      1.0 |    171.0 |
-    | (0.15, 0.20]       |      21525 | 19.368595 |        13.0 |      1.0 |    395.0 |
-    | (0.20, 0.25]       |      17415 | 25.453000 |        17.0 |      1.0 |    572.0 |
-    | (0.25, ....]       |      62739 | 233.89735 |        81.0 |      1.0 |   4148.0 |    
+    | rise_percent_group | count_days | mean_days | median_days | quantile_75_days | quantile_90_days | min_days | max_days |
+    |--------------------|------------|-----------|-------------|------------------|------------------|----------|----------|
+    | (0.00, 0.05]       |      47497 |  2.078468 |         1.0 |              2.0 |              4.0 |      1.0 |     68.0 |
+    | (0.05, 0.10]       |      63075 |  4.962901 |         3.0 |              6.0 |             11.0 |      1.0 |    146.0 |
+    | (0.10, 0.15]       |      38469 | 10.174634 |         6.0 |             13.0 |             23.0 |      1.0 |    171.0 |
+    | (0.15, 0.20]       |      21525 | 19.368595 |        13.0 |             26.0 |             44.0 |      1.0 |    395.0 |
+    | (0.20, 0.25]       |      17415 | 25.453000 |        17.0 |             34.0 |             58.0 |      1.0 |    572.0 |
+    | (0.25, ....]       |      62739 | 233.89735 |        81.0 |            234.0 |            612.0 |      1.0 |   4148.0 |    
     """
     max_trade_days = dataset_group_cons['common'].get('MAX_TRADE_DAYS_LIST')
     if max_trade_days is None:
@@ -1102,8 +1118,10 @@ def get_gaps_agg_days_information_groupby_rate(
         else:
             labels.append(f'({bins[i]:.2f}, {bins[i+1]:.2f}]')
     gap_df['rise_percent_group'] = pd.cut(gap_df['rise_percent'], bins=bins, labels=labels)
-    grouped = gap_df.groupby('rise_percent_group')['days'].agg(['count', 'mean', 'median', 'min', 'max'])
-    new_columns = ['count_days', 'mean_days', 'median_days', 'min_days', 'max_days']
+    grouped = gap_df.groupby('rise_percent_group')['days'].agg(
+        ['count', 'mean', 'median', lambda x: x.quantile(0.75), lambda x: x.quantile(0.90), 'min', 'max']
+    )
+    new_columns = ['count_days', 'mean_days', 'median_days', 'quantile_75_days', 'quantile_90_days', 'min_days', 'max_days']
     grouped.columns = new_columns
     grouped = grouped.reset_index()
     return grouped
