@@ -10,12 +10,13 @@ import pandas as pd  # type: ignore
 from tensorflow import keras  
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
-from utils import calculate_today_series_statistic_indicator
+from utils import calculate_today_series_statistic_indicator, check_pre_trade_data_update_status, send_wechat_message_via_bark
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
 from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indicator, update_all_daily_simple_quant_factor, update_all_adj_factor_data,
                                     download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, 
                                     download_all_stocks_daily_temp_indicator_data, download_all_stocks_daily_simple_temp_quant_factor)
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, clear_buy_in_list
+from cons_hidden import bark_device_key
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_CSV, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
                            TEST_DATASET_PERCENT, MODEL_NAME, DROP_ROWS_CSV, BUY_IN_LIST_ORIGIN)
@@ -495,6 +496,11 @@ def XD_stock_list_task():
     XD_holding_list()
     print(f'({MODEL_NAME}) {today} 持有清单前复权和股数调整完成！')
 
+@is_trade_day(task='检查交易前数据更新状态')
+def check_pre_trade_data_update_status_task():
+    status = check_pre_trade_data_update_status()
+    send_wechat_message_via_bark(device_key=bark_device_key, message=status, title='检查交易前数据更新状态')
+
 @is_trade_day(task='计算今日统计指标')
 def calculate_today_statistics_indicators():
     calculate_today_series_statistic_indicator(name='oversold')
@@ -624,6 +630,12 @@ def auto_run():
         trigger='cron',
         hour=9, minute=32, second=45, misfire_grace_time=300,
         id='XD_stock_list_task'
+    )
+    scheduler.add_job(
+        check_pre_trade_data_update_status_task,
+        trigger='cron',
+        hour=9, minute=34, second=30, misfire_grace_time=300,
+        id='check_pre_trade_data_update_status_task'
     )
     scheduler.add_job(
         trading_task_am,

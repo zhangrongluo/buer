@@ -648,6 +648,7 @@ def scan_holding_list(max_trade_days: int):
             EXTRA_TRADE_DAYS = dataset_group_cons[group].get('EXTRA_TRADE_DAYS')
             MODEL_NAME = dataset_group_cons[group].get('MODEL_NAME')
             TRADE_LOG = dataset_group_cons[group].get('TRADE_LOG')
+            MAX_DOWN_LIMIT = dataset_group_cons[group].get('MAX_DOWN_LIMIT')
             break
     trade_log = get_trade_logger(TRADE_LOG)
     if not os.path.exists(HOLDING_LIST):
@@ -700,20 +701,27 @@ def scan_holding_list(max_trade_days: int):
             msg = f'卖出 {ts_code} {stock_name}: the down gap is filled'
             trade_log.info(msg)
             return
+        # if reach the max down limit, sell out
+        rate_current = row['rate_current']
+        if rate_current <= MAX_DOWN_LIMIT:
+            with lock:
+                sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
+            msg = f'卖出 {ts_code} {stock_name}: reach the max down limit {MAX_DOWN_LIMIT:.2%}, rate_current {rate_current:.2%}'
+            trade_log.info(msg)
+            return
         # if days > MAX_TRADE_DAYS, sell out
         days = row['days']
-        rate_current = row['rate_current']
         if days >= MAX_TRADE_DAYS:
-            # 到期亏损，延期一次
+            # 到期亏损或者略微盈利，延期等待
             max_days = MAX_TRADE_DAYS + EXTRA_TRADE_DAYS
-            if days < max_days and rate_current <= 0:
+            if days < max_days and rate_current <= 0.50 / 100:
                 return
             with lock:
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
             msg = f'卖出 {ts_code} {stock_name}: days > {MAX_TRADE_DAYS}'
             trade_log.info(msg)
             return
-        # if rate_yearly >= 3.0 and holding_days >= 10, sell out in advance
+        # if early sell standard met, sell out
         rate_yearly = row['rate_yearly']
         early_or_not =  early_sell_standard_downgap(holding_days, rate_current, rate_yearly)
         if early_or_not:

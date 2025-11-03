@@ -11,7 +11,7 @@ import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
 from basic_data_alt_edition import download_dividend_data_in_multi_ways
-from cons_general import TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, TEMP_DIR
+from cons_general import TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, TEMP_DIR, DAILY_ADJFACTOR_TEMP_CSV
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
 
@@ -423,6 +423,50 @@ def get_up_down_limit(code: str) -> tuple[float, float, float]:
     up_limit_rate = round((up_limit - pre_close) / pre_close, 2)
     return up_limit, down_limit, up_limit_rate
 
+def check_pre_trade_data_update_status() -> dict[str, bool]:
+    """
+    ### 检查交易前数据是否更新完成
+    #### 检查四个文件: TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, SUSPEND_STOCK_CSV, DAILY_ADJFACTOR_TEMP_CSV
+    #### 检查内容: 文件是否存在且是否已更新至最新交易日
+    :return: 字典, 包含各数据更新状态
+    """
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    status = {
+        'trade_cal_updated': False,
+        'up_down_limit_updated': False,
+        'suspend_stock_updated': False,
+        'daily_adj_factor_updated': False
+    }
+    # check trade calendar
+    if os.path.exists(TRADE_CAL_CSV):
+        trade_cal_df = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
+        if not trade_cal_df.empty:
+            last_trade_date = trade_cal_df['cal_date'].max()
+            if last_trade_date >= today:
+                status['trade_cal_updated'] = True
+    # check up down limit
+    if os.path.exists(UP_DOWN_LIMIT_CSV):
+        up_down_df = pd.read_csv(UP_DOWN_LIMIT_CSV, dtype={'trade_date': str})
+        if not up_down_df.empty:
+            last_trade_date = up_down_df['trade_date'].max()
+            if last_trade_date >= today:
+                status['up_down_limit_updated'] = True
+    # check suspend stock
+    if os.path.exists(SUSPEND_STOCK_CSV):
+        suspend_stock_df = pd.read_csv(SUSPEND_STOCK_CSV, dtype={'trade_date': str})
+        if not suspend_stock_df.empty:
+            last_trade_date = suspend_stock_df['trade_date'].max()
+            if last_trade_date >= today:
+                status['suspend_stock_updated'] = True
+    # check daily adj factor tmp  csv
+    if os.path.exists(DAILY_ADJFACTOR_TEMP_CSV):
+        daily_adj_factor_df = pd.read_csv(DAILY_ADJFACTOR_TEMP_CSV, dtype={'trade_date': str})
+        if not daily_adj_factor_df.empty:
+            last_trade_date = daily_adj_factor_df['trade_date'].max()
+            if last_trade_date >= today:
+                status['daily_adj_factor_updated'] = True
+    return status
+
 def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
     """
     oversold 提前卖出标准
@@ -431,7 +475,7 @@ def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_ye
     :param rate_yearly: 年化收益率
     :return: True if should sell, False otherwise
     NOTE:
-    holding_days < 15 and rate_current >= 0.25
+    holding_days < 15 and rate_current >= 0.20
     30 > holding_days >= 15 and rate_yearly >= 3.65
     60 > holding_days >= 30 and rate_yearly >= 2.23
     90 > holding_days >= 60 and rate_yearly >= 1.58
@@ -440,7 +484,7 @@ def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_ye
     2.23 = 365/((30+60)/2)*((0.25+0.30)/2)
     1.58 = 365/((60+90)/2)*((0.30+0.35)/2)
     """
-    if holding_days < 15 and rate_current >= 0.25:
+    if holding_days < 15 and rate_current >= 0.20:
         return True
     elif 15 <= holding_days < 30 and rate_yearly >= 3.65:
         return True
@@ -462,7 +506,7 @@ def early_sell_standard_downgap(holding_days: int, rate_current: float, rate_yea
     rate_yearly 按照年 365 天计算
     3.65 = 365/((10+20)/2)*((0.12+0.18)/2)
     """
-    if holding_days < 10 and rate_current >= 0.12:
+    if holding_days < 10 and rate_current >= 0.10:
         return True
     elif 10 <= holding_days < 20 and rate_yearly >= 3.65:
         return True
@@ -1125,3 +1169,64 @@ def get_gaps_agg_days_information_groupby_rate(
     grouped.columns = new_columns
     grouped = grouped.reset_index()
     return grouped
+
+### 和指数相关统计函数
+def calculate_correlation_between_portfolio_and_index(
+        name: Literal['oversold', 'downgap'], index_code: str = '000001.SH',
+        start: str = None, end: str = None, **kwargs
+) -> float:
+    """
+    ### 计算投资组合和指定指数之间日收益率的相关系数
+    #### :param name: 投资策略的名称: oversold 或者 downgap
+    #### :param index_code: 指数代码, 例如 '000001.SH' 表示上证综合指数
+    #### :param start: 'YYYYMMDD' 格式, 默认为 None (所有数据)
+    #### :param end: 'YYYYMMDD' 格式, 默认为 None (所有数据)
+    #### :param kwargs: 例如, downgap 策略的 max_trade_days(必须提供)
+    #### :return: 相关系数
+    #### NOTE:
+    #### 计算投资组合的每日收益率与指定指数的每日收益率之间的相关系数
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        trade_root = f'{TRADE_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
+        trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
+    indicator_csv = f'{trade_root}/statistic_indicator.csv'
+    if not os.path.exists(indicator_csv):
+        return 0.0
+    indicator_df = pd.read_csv(indicator_csv, dtype={'trade_date': str})
+    if start is None:
+        start = indicator_df['trade_date'].min()
+    if end is None:
+        end = indicator_df['trade_date'].max()
+    indicator_df = indicator_df[(indicator_df['trade_date'] >= start) & (indicator_df['trade_date'] <= end)]
+    if indicator_df.empty:
+        return 0.0
+    indicator_df = indicator_df[['trade_date', 'return_ratio']]
+    indicator_df = indicator_df.sort_values(by='trade_date', ascending=True)
+    indicator_df = indicator_df.reset_index(drop=True)
+    # 下载指数数据
+    pro = ts.pro_api()
+    index_df = pro.index_daily(ts_code=index_code, start_date=start, end_date=end)
+    if index_df.empty:
+        return 0.0
+    index_df = index_df[['trade_date', 'pct_chg']]
+    index_df = index_df.sort_values(by='trade_date', ascending=True)
+    index_df = index_df.reset_index(drop=True)
+    # 合并数据
+    merged_df = pd.merge(indicator_df, index_df, on='trade_date', how='inner')
+    if merged_df.empty:
+        return 0.0
+    correlation = merged_df['return_ratio'].corr(merged_df['pct_chg'])
+    return round(correlation, 4)
