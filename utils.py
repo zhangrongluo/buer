@@ -19,11 +19,11 @@ from cons_downgap import dataset_group_cons
 # send wechat message
 def send_wechat_message_via_bark(device_key, title, message):
     """
-    send wechat message via bark
-    :param device_key: bark device key
-    :param title: message title
-    :param message: message content
-    :return: response
+    ### 通过Bark发送消息
+    #### :param device_key: 系统生成的Bark设备Key
+    #### :param title: 消息标题
+    #### :param message: 消息内容
+    #### :return: 发送结果
     """
     url = f"https://api.day.app/{device_key}/{title}/{message}"
     response = requests.get(url).json()
@@ -31,15 +31,14 @@ def send_wechat_message_via_bark(device_key, title, message):
 
 def send_wechat_message_via_pushover(user_key, app_token, title, message):
     """
-    send wechat message via pushover
-    :param user_key: pushover user key
-    :param app_token: pushover app token
-    :param title: message title
-    :param message: message content
-    :return: response
+    ### 通过Pushover发送消息
+    #### :param user_key: pushover user key
+    #### :param app_token: pushover app token
+    #### :param title: 消息标题
+    #### :param message: 消息内容
+    #### :return: 发送结果
     NOTE:
-    backup method when bark not works, 10000 messages/month free
-    need to feed for more messages
+    需要先在 Pushover 网站注册应用并缴纳费用
     """
     url = "https://api.pushover.net/1/messages.json"
     data = {
@@ -53,11 +52,11 @@ def send_wechat_message_via_pushover(user_key, app_token, title, message):
 
 def get_stock_price_from_sina(code: str) -> float | None:
     """ 
-    get stock realtime price from sina finance
-    :param code: stock code, like 000001 or 000001.SH
-    :return: stock price
-    NOTE:
-    get stock price by chromium, very slow, last way.
+    ### 从sina财经获取股票实时价格(chromium方式)
+    #### :param code: 股票代码, 格式为 000001 or 000001.SH
+    #### :return: 股票实时价格
+    #### NOTE: 
+    #### 速度较慢
     """
     try:
         code = code[:6]
@@ -76,10 +75,10 @@ def get_stock_price_from_sina(code: str) -> float | None:
 
 def get_stock_price_from_tencent(code: str) -> float | None:
     """
-    get stock realtime price from tencent finance
-    :param code: stock code, like 000001 or 000001.SH
-    :return: realtime stock price
-    NOTE: written by Grok
+    ### 从腾讯财经获取股票实时价格
+    #### :param code: 股票代码, 格式为 000001 or 000001.SH
+    #### :return: 股票实时价格
+    #### NOTE: written by Grok
     """
     stock_code = code[:6]
     stock_code = 'sh'+stock_code if code[0] == '6' else 'sz'+stock_code
@@ -105,11 +104,9 @@ def get_stock_price_from_tencent(code: str) -> float | None:
     
 async def async_get_stock_price_from_tencent(code: str) -> float | None:
     """
-    get stock realtime price from tencent finance using asyncio
-    :param code: stock code, like 000001 or 000001.SH
-    :return: realtime stock price
-    NOTE: 
-    Async version of get_stock_price_from_tencent
+    ### 从腾讯财经获取指定股票实时价格(asyncio异步方式)
+    #### :param code: 股票代码, 格式为 000001 or 000001.SH
+    #### :return: 股票实时价格
     """
     stock_code = code[:6]
     stock_code = 'sh' + stock_code if code[0] == '6' else 'sz' + stock_code
@@ -136,11 +133,9 @@ async def async_get_stock_price_from_tencent(code: str) -> float | None:
 
 async def get_all_prices_async(ts_codes: list[str]) -> dict[str, float | None]:
     """
-    异步并发获取多个股票股价
-    :param ts_codes: 股票代码列表, 如 ['000001.SZ', '600000.SH']
-    :return: 字典, 股票代码为键, 实时价格为值
-    NOTE:
-    采用腾讯财经接口单渠道获取股票价格
+    ### 异步并发获取多个股票股价(腾讯财经)
+    #### :param ts_codes: 股票代码列表, 如 ['000001.SZ', '600000.SH']
+    #### :return: 字典, 股票代码为键, 实时价格为值
     """
     tasks = [async_get_stock_price_from_tencent(code) for code in ts_codes]
     prices = await asyncio.gather(*tasks, return_exceptions=True)
@@ -154,7 +149,7 @@ async def get_all_prices_async(ts_codes: list[str]) -> dict[str, float | None]:
     
 def get_stock_realtime_price(code: str) -> float | None:
     """
-    采用多重模式获取股票实时交易价格
+    ### 采用多重模式获取股票实时交易价格
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -173,15 +168,14 @@ def get_stock_realtime_price(code: str) -> float | None:
 
 def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.DataFrame:
     """
-    获取新浪财经今日历史实时价格数据(分钟数据)
-    :param code: 股票代码, 如 000001 或 000001.SZ, 要转换为 sh600000 或 sz000001 格式
-    :param scale: 分钟周期, 1(1分钟)、5(5分钟)、15(15分钟)、30(30分钟)、60(60分钟)
-    :param datalen: 返回的数据节点数量, 最大值为1023
-    :return: 实时价格数据序列或则空 DataFrame
-    NOTE:
-    url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?\
-    symbol=[股票代码]&scale=[分钟周期]&ma=no&datalen=[数据长度]'
-    ma=no 表示不返回均线数据
+    ### 获取新浪财经今日历史实时价格数据(分钟数据)
+    #### :param code: 股票代码, 如 000001 或 000001.SZ, 要转换为 sh600000 或 sz000001 格式
+    #### :param scale: 分钟周期, 1(1分钟)、5(5分钟)、15(15分钟)、30(30分钟)、60(60分钟)
+    #### :param datalen: 返回的数据节点数量, 最大值为1023
+    #### :return: 实时价格数据序列或则空 DataFrame
+    #### NOTE:
+    #### url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?
+    #### symbol=[股票代码]&scale=[分钟周期]&ma=no&datalen=[数据长度]', ma=no 表示不返回均线数据
     """
     code = f'sh{code[:6]}' if code.startswith('6') else f'sz{code[:6]}'
     url = f'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?\
@@ -206,13 +200,13 @@ def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.Dat
 
 def get_history_realtime_price_DF_from_dc(code, klt=1, datalen=15) -> pd.DataFrame:
     """
-    从东方财富获取股票分钟级别价格数据
-    :param code: 股票代码, 000001或者000001.SZ, 需转化成 sz000001 或则sh600000 格式
-    :param klt: K线周期, 1(1分钟)、5(5分钟)、15(15分钟)、30(30分钟)、60(60分钟)
-    :param datalen: 返回的数据节点数量
-    :return: DataFrame   
-    NOTE:
-    written by Grok, 参数详细说明见 https://www.sanrenjz.com/2023/03/31/
+    ### 从东方财富获取股票分钟级别价格数据
+    #### :param code: 股票代码, 000001或者000001.SZ, 需转化成 sz000001 或则sh600000 格式
+    #### :param klt: K线周期, 1(1分钟)、5(5分钟)、15(15分钟)、30(30分钟)、60(60分钟)
+    #### :param datalen: 返回的数据节点数量
+    #### :return: DataFrame 包含 day、open、close、high、low 列
+    #### NOTE:
+    #### 参数详细说明见 https://www.sanrenjz.com/2023/03/31/, written by Grok
     """
     code = 'sh' + code[:6] if code.startswith('6') else 'sz' + code[:6]
     market = '1' if code.startswith('sh') else '0'
@@ -258,12 +252,12 @@ def get_history_realtime_price_DF_from_dc(code, klt=1, datalen=15) -> pd.DataFra
 
 def get_qfq_price_DF_by_adj_factor(src_data: pd.DataFrame) -> pd.DataFrame:
     """
-    通过复权因子计算前复权价格序列
-    :param src_data: basicdata/dailydata下日行情数据(按trade_date升序排列)
-    :return: src_data(open、high、low、close、pre_close、change、pct_chg)
-    前复权的价格序列(按trade_date升序排列)
-    NOTE:
-    复权后价格为空的行被删除
+    ### 通过复权因子计算前复权价格序列
+    #### :param src_data: basicdata/dailydata下日行情数据(按trade_date升序排列)
+    #### :return: src_data(open、high、low、close、pre_close、change、pct_chg)
+    #### 前复权的价格序列(按trade_date升序排列)
+    #### NOTE:
+    #### 复权后价格为空的行被删除
     """
     src_data_cp = src_data.copy()
     src_data_cp = src_data_cp.sort_values(by='trade_date', ascending=True)  # 升序排列
@@ -298,19 +292,17 @@ def get_qfq_price_DF_by_adj_factor(src_data: pd.DataFrame) -> pd.DataFrame:
 
 def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = None) -> float:
     """
-    根据XR送转股比例将start日股数转换到end日的股数
-    :param code: 股票代码, 如 000001 或 000001.SZ
-    :param amount: 未除权的股数
-    :param start: 起始日期(YYYYMMDD)
-    :param end: 结束日期(YYYYMMDD), None表示到今天
-    :return: end日调整后的股数(一般为放大股数)
-    NOTE: 
-    xr_amount = amount * (1 + div_per_stock)
-    div_per_stock: 每股转送股数
-    如有多次除权，按实施时间顺序从前到后依次计算(前复权)
-    NOTE:
-    参数错误直接返回原股数,不再抛出异常
-    如未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据
+    ### 根据XR送转股比例将start日股数转换到end日的股数
+    #### :param code: 股票代码, 如 000001 或 000001.SZ
+    #### :param amount: 未除权的股数
+    #### :param start: 起始日期(YYYYMMDD)
+    #### :param end: 结束日期(YYYYMMDD), None表示到今天
+    #### :return: end日调整后的股数(一般为放大股数)
+    #### NOTE: 
+    #### xr_amount = amount * (1 + div_per_stock), div_per_stock: 每股转送股数
+    #### 如有多次除权，按实施时间顺序从前到后依次计算(前复权)
+    #### 参数错误直接返回原股数,不再抛出异常
+    #### 如未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -345,14 +337,14 @@ def get_XR_adjust_amount_by_dividend_data(code, amount, start:str, end:str = Non
 
 def get_qfq_price_by_adj_factor(code, pre_price, start: str, end: str = None) -> float:
     """
-    获取前复权价格
-    :param code: 股票代码, 如 000001 或 000001.SZ
-    :param pre_price: 未复权的价格
-    :param start: 起始日期(YYYYMMDD)
-    :param end: 结束日期(YYYYMMDD), None表示到今天
-    :return: 复权后的价格
-    NOTE:
-    参数错误直接返回原价格和股数,不再抛出异常
+    ### 获取前复权价格
+    #### :param code: 股票代码, 如 000001 或 000001.SZ
+    #### :param pre_price: 未复权的价格
+    #### :param start: 起始日期(YYYYMMDD)
+    #### :param end: 结束日期(YYYYMMDD), None表示到今天
+    #### :return: 复权后的价格
+    #### NOTE:
+    #### 参数错误直接返回原价格和股数,不再抛出异常
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -395,9 +387,9 @@ def get_qfq_price_by_adj_factor(code, pre_price, start: str, end: str = None) ->
 
 def get_up_down_limit(code: str) -> tuple[float, float, float]:
     """
-    获取股票的涨跌停价格
-    :param code: 股票代码, 如 000001 或 000001.SZ
-    :return: (涨停价, 跌停价, 涨停幅度)
+    ### 获取股票的涨跌停价格
+    #### :param code: 股票代码, 如 000001 或 000001.SZ
+    #### :return: (涨停价, 跌停价, 涨停幅度)
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -425,10 +417,9 @@ def get_up_down_limit(code: str) -> tuple[float, float, float]:
 
 def check_pre_trade_data_update_status() -> dict[str, bool]:
     """
-    ### 检查交易前数据是否更新完成
+    ### 检查盘前数据是否更新完成
     #### 检查四个文件: TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, SUSPEND_STOCK_CSV, DAILY_ADJFACTOR_TEMP_CSV
     #### 检查内容: 文件是否存在且是否已更新至最新交易日
-    :return: 字典, 包含各数据更新状态
     """
     today = datetime.datetime.now().strftime('%Y%m%d')
     status = {
@@ -467,61 +458,93 @@ def check_pre_trade_data_update_status() -> dict[str, bool]:
                 status['daily_adj_factor_updated'] = True
     return status
 
+def check_daily_temp_data_update_status() -> dict[str, bool]:
+    """
+    ### 检查盘后行情数据是否更新完成
+    #### 检查三个文件: DAILY_DATA_TEMP_CSV, DAILY_INDICATOR_TEMP_CSV, DAILY_QUANT_FACTOR_TEMP_CSV
+    #### 检查内容: 文件是否存在且是否已更新至最新交易日
+    """
+    from cons_general import DAILY_DATA_TEMP_CSV, DAILY_INDICATOR_TEMP_CSV, DAILY_QUANT_FACTOR_TEMP_CSV
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    status = {
+        'daily_data_updated': False,
+        'daily_indicator_updated': False,
+        'daily_quant_factor_updated': False
+    }
+    # check daily data temp csv
+    if os.path.exists(DAILY_DATA_TEMP_CSV):
+        daily_data_df = pd.read_csv(DAILY_DATA_TEMP_CSV, dtype={'trade_date': str})
+        if not daily_data_df.empty:
+            last_trade_date = daily_data_df['trade_date'].max()
+            if last_trade_date >= today:
+                status['daily_data_updated'] = True
+    # check daily indicator temp csv
+    if os.path.exists(DAILY_INDICATOR_TEMP_CSV):
+        daily_indicator_df = pd.read_csv(DAILY_INDICATOR_TEMP_CSV, dtype={'trade_date': str})
+        if not daily_indicator_df.empty:
+            last_trade_date = daily_indicator_df['trade_date'].max()
+            if last_trade_date >= today:
+                status['daily_indicator_updated'] = True
+    # check daily quant factor temp csv
+    if os.path.exists(DAILY_QUANT_FACTOR_TEMP_CSV):
+        daily_quant_factor_df = pd.read_csv(DAILY_QUANT_FACTOR_TEMP_CSV, dtype={'trade_date': str})
+        if not daily_quant_factor_df.empty:
+            last_trade_date = daily_quant_factor_df['trade_date'].max()
+            if last_trade_date >= today:
+                status['daily_quant_factor_updated'] = True
+    return status
+
 def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
     """
-    oversold 提前卖出标准
-    :param holding_days: 持有天数
-    :param rate_current: 当前收益率
-    :param rate_yearly: 年化收益率
-    :return: True if should sell, False otherwise
-    NOTE:
-    holding_days < 15 and rate_current >= 0.20
-    30 > holding_days >= 15 and rate_yearly >= 3.65
-    60 > holding_days >= 30 and rate_yearly >= 2.23
-    90 > holding_days >= 60 and rate_yearly >= 1.58
-    rate_yearly 按照年 365 天计算
-    3.65 = 365/((15+30)/2)*((0.20+0.25)/2)
-    2.23 = 365/((30+60)/2)*((0.25+0.30)/2)
-    1.58 = 365/((60+90)/2)*((0.30+0.35)/2)
+    ### oversold 提前卖出标准
+    #### :param holding_days: 持有天数
+    #### :param rate_current: 当前收益率
+    #### :param rate_yearly: 年化收益率
+    #### :return: True if should sell, False otherwise
+    #### NOTE:
+    #### holding_days < 30 and rate_current >= 0.20
+    #### 60 > holding_days >= 30 and rate_yearly >= 2.02
+    #### 90 > holding_days >= 60 and rate_yearly >= 1.70
+    #### rate_yearly 按照年 365 天计算
+    #### 2.02 = 365/((30+60)/2)*((0.20+0.30)/2)
+    #### 1.70 = 365/((60+90)/2)*((0.30+0.40)/2)
     """
-    if holding_days < 15 and rate_current >= 0.20:
+    if holding_days < 30 and rate_current >= 0.20:
         return True
-    elif 15 <= holding_days < 30 and rate_yearly >= 3.65:
+    elif 30 <= holding_days < 60 and rate_yearly >= 2.02:
         return True
-    elif 30 <= holding_days < 60 and rate_yearly >= 2.23:
-        return True
-    elif 60 <= holding_days < 90 and rate_yearly >= 1.58:
+    elif 60 <= holding_days < 90 and rate_yearly >= 1.70:
         return True
     else:
         return False
 
 def early_sell_standard_downgap(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
     """
-    downgap 提前卖出标准
-    :param holding_days: 持有天数
-    :param rate_current: 当前收益率
-    :param rate_yearly: 年化收益率
-    :return: True if should sell, False otherwise
-    NOTE:
-    rate_yearly 按照年 365 天计算
-    3.65 = 365/((10+20)/2)*((0.12+0.18)/2)
+    ### downgap 提前卖出标准
+    #### :param holding_days: 持有天数
+    #### :param rate_current: 当前收益率
+    #### :param rate_yearly: 年化收益率
+    #### :return: True if should sell, False otherwise
+    #### NOTE:
+    #### rate_yearly 按照年 365 天计算
+    #### 3.04 = 365/((10+20)/2)*((0.10+0.15)/2)
     """
     if holding_days < 10 and rate_current >= 0.10:
         return True
-    elif 10 <= holding_days < 20 and rate_yearly >= 3.65:
+    elif 10 <= holding_days < 20 and rate_yearly >= 3.04:
         return True
     else:
         return False
 
 def is_rising_or_not(code, price_now: float, method: Literal['max', 'mean'] = 'mean') -> bool:
     """
-    判断股票是否上涨
-    :param code: 股票代码, 如 000001 或 000001.SZ
-    :param price_now: 当前价格
-    :param method: 判断方法, 'max' 或 'mean', 默认 'mean'
-    :return: True if stock is rising, False otherwise
-    NOTE:
-    如果 price_now 超过前 10 分钟平均价(最高价), 则认为上涨
+    ### 判断股票是否上涨
+    #### :param code: 股票代码, 如 000001 或 000001.SZ
+    #### :param price_now: 当前价格
+    #### :param method: 判断方法, 'max' 或 'mean', 默认 'mean'
+    #### :return: True if stock is rising, False otherwise
+    #### NOTE:
+    #### 如果 price_now 超过前 15 分钟平均价(最高价), 则认为上涨
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -538,13 +561,13 @@ def is_rising_or_not(code, price_now: float, method: Literal['max', 'mean'] = 'm
 
 def is_decreasing_or_not(code, price_now: float, method: Literal['min', 'mean'] = 'mean') -> bool:
     """
-    判断股票是否下跌
-    :param code: 股票代码, 如 000001 或 000001.SZ
-    :param price_now: 当前价格
-    :param method: 判断方法, 'min' 或 'mean', 默认 'mean'
-    :return: True if stock is decreasing, False otherwise
-    NOTE:
-    如果 price_now 低于前 10 分钟平均价(最低价), 则认为下跌
+    ### 判断股票是否下跌
+    #### :param code: 股票代码, 如 000001 或 000001.SZ
+    #### :param price_now: 当前价格
+    #### :param method: 判断方法, 'min' 或 'mean', 默认 'mean'
+    #### :return: True if stock is decreasing, False otherwise
+    #### NOTE:
+    #### 如果 price_now 低于前 15 分钟平均价(最低价), 则认为下跌
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -561,8 +584,8 @@ def is_decreasing_or_not(code, price_now: float, method: Literal['min', 'mean'] 
 
 def is_trade_date_or_not():
     """ 
-    check if today is trade date or not
-    :return: True if today is trade date, False otherwise
+    ### 检查今天是否为交易日
+    #### :return: True if today is trade date, False otherwise
     """
     today = datetime.datetime.now().strftime('%Y%m%d')
     trade_cal = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
@@ -572,9 +595,9 @@ def is_trade_date_or_not():
 
 def is_suspended_or_not(code: str) -> bool:
     """
-    check if stock is suspended
-    :param code: stock code
-    :return: True if suspended, False otherwise
+    ### 检查股票是否停牌
+    #### :param code: 股票代码, 如 000001 或 000001.SZ
+    #### :return: True if suspended, False otherwise
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -597,13 +620,13 @@ def calculate_win_rate_of_days(
         name : Literal['oversold', 'downgap'], start=None, end=None, days=1, **kwargs
 ):
     """
-    Calculate the win rate based on number of days
-    :param name: Name of the strategy or model, oversold or downgap
-    :param start: 'YYYYMMDD' format, default is None (all data)
-    :param end: 'YYYYMMDD' format, default is None (all data)
-    :param days: Number of days to calculate profit, default is 1
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: Win rate (percentage)
+    ### 计算基于天数的胜率
+    #### :param name: 策略名称, oversold or downgap
+    #### :param start: 开始日期,'YYYYMMDD' 格式, 默认为 None (从最早数据开始)
+    #### :param end: 结束日期,'YYYYMMDD' 格式, 默认为 None (到最新数据为止)
+    #### :param days: 天数计算基准, 默认为 1, 即以每日盈亏为基准计算胜率
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 胜率 (百分比)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -651,12 +674,12 @@ def calculate_win_rate_of_stocks(
         name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
 ):
     """
-    Calculate the win rate based on number of sold_out stocks
-    :param name: Name of the strategy or model, oversold or downgap
-    :param start: 'YYYYMMDD' format, default is None (all data)
-    :param end: 'YYYYMMDD' format, default is None (all data)
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: Win rate (percentage)
+    ### 计算基于售出股票数量的胜率
+    #### :param name: 策略名称, oversold or downgap
+    #### :param start: 开始日期,'YYYYMMDD' 格式, 默认为 None (从最早数据开始)
+    #### :param end: 结束日期,'YYYYMMDD' 格式, 默认为 None (到最新数据为止)
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 胜率 (百分比)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -696,12 +719,14 @@ def calculate_omega_ratio(
         name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
 ):
     """
-    Calculate omega ratio (total profit to total loss)
-    :param name: Name of the strategy or model, oversold or downgap
-    :param start: 'YYYYMMDD' format, default is None (all data)
-    :param end: 'YYYYMMDD' format, default is None (all data)
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: Ratio of total profit to total loss
+    ### 计算omega比率(Omega Ratio)
+    #### :param name: 策略名称, oversold or downgap
+    #### :param start: 开始日期,'YYYYMMDD' 格式, 默认为 None (从最早数据开始)
+    #### :param end: 结束日期,'YYYYMMDD' 格式, 默认为 None (到最新数据为止)
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 总盈利与总亏损之比
+    #### NOTE:
+    #### Omega Ratio = 总盈利 / 总亏损
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -739,11 +764,11 @@ def get_stock_list_of_specific_date(
         name: Literal['oversold', 'downgap'], date: str, **kwargs
 ) -> pd.DataFrame:
     """
-    Get stock list of specific date
-    :param name: Name of the strategy or model, oversold or downgap
-    :param date: 'YYYYMMDD' format
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: List of stock codes for the specific date
+    ### 获取特定日期的股票列表
+    #### :param name: 策略名称, oversold or downgap
+    #### :param date: 指定日期, 'YYYYMMDD' 格式
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 指定日期的股票列表
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -783,11 +808,11 @@ def calculate_profit_of_specific_date(
         name: Literal['oversold', 'downgap'], date: str, **kwargs
 ) -> float:
     """
-    Calculate the profit of specific date
-    :param name: Name of the strategy or model, oversold or downgap
-    :param date: 'YYYYMMDD' format
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: Profit of the specific date
+    ### 计算指定日期的盈利
+    #### :param name: 策略名称, oversold or downgap
+    #### :param date: 指定日期, 'YYYYMMDD' 格式
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 指定日期的盈利
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -818,13 +843,13 @@ def calculate_return_ratio_of_specific_date(
         name: Literal['oversold', 'downgap'], date: str, **kwargs
 ) -> float:
     """
-    Calculate the return ratio of specific date
-    :param name: Name of the strategy or model, oversold or downgap
-    :param date: 'YYYYMMDD' format
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: Return ratio of the specific date
-    NOTE:
-    Return ratio = (total profit) / (total value of the stocks)
+    ### 计算指定日期的收益率
+    #### :param name: 策略名称, oversold or downgap
+    #### :param date: 指定日期, 'YYYYMMDD' 格式
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 指定日期的收益率
+    #### NOTE:
+    #### 收益率 = (指定日期盈利) / (股票的总市值)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -851,10 +876,10 @@ def calculate_today_series_statistic_indicator(
         name: Literal['oversold', 'downgap'], **kwargs
 ):
     """
-    Calculate today's series statistic indicators
-    :param name: Name of the strategy or model, oversold or downgap
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    NOTE:
+    ### 计算今天的系列统计指标
+    #### :param name: 策略名称, oversold or downgap
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### NOTE:
     - 'win_rate': Win rate of the strategy(1、5、10、20、30 days)
     - 'omega_ratio': Omega ratio of the strategy
     - 'return_ratio': Return ratio of the strategy
@@ -908,14 +933,14 @@ def calculate_information_ratio(
         name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
 ):
     """
-    Calculate information ratio
-    :param name: Name of the strategy or model, oversold or downgap
-    :param start: 'YYYYMMDD' format, default is None (all data)
-    :param end: 'YYYYMMDD' format, default is None (all data)
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: Information ratio
-    NOTE:
-    Information ratio = (mean return) / (standard deviation of return) * sqrt(252)
+    ### 计算信息比率(Information Ratio)
+    #### :param name: 策略名称, oversold or downgap
+    #### :param start: 开始日期,'YYYYMMDD' 格式, 默认为 None (从最早数据开始)
+    #### :param end: 结束日期,'YYYYMMDD' 格式, 默认为 None (到最新数据为止)
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 信息比率
+    #### NOTE:
+    #### 信息比率 = (平均日收益率) / (日收益率的标准差) * sqrt(252)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -956,16 +981,15 @@ def calculate_sharpe_ratio(
         name: Literal['oversold', 'downgap'], rf: float, start=None, end=None, **kwargs
 ):
     """
-    Calculate Sharpe ratio
-    :param name: Name of the strategy or model, oversold or downgap
-    :param rf: Risk-free rate, e.g., 0.03 for 3%
-    :param start: 'YYYYMMDD' format, default is None (all data)
-    :param end: 'YYYYMMDD' format, default is None (all data)
-    :param kwargs: e.g., max_trade_days for downgap strategy
-    :return: Sharpe ratio
-    NOTE:
-    Sharpe ratio = (mean return - risk-free rate) / (standard deviation of return) * sqrt(252)
-    risk-free rate normally is equal to 10-year government bond yield
+    ### 计算夏普比率(Sharpe Ratio)
+    #### :param name: 策略名称, oversold or downgap
+    #### :param rf: 无风险利率, 例如 0.03 表示 3%
+    #### :param start: 开始日期,'YYYYMMDD' 格式, 默认为 None (从最早数据开始)
+    #### :param end: 结束日期,'YYYYMMDD' 格式, 默认为 None (到最新数据为止)
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 夏普比率
+    #### NOTE:
+    #### 夏普比率 = (平均日收益率 - 无风险利率) / (日收益率的标准差) * sqrt(252)
     """
     if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
         raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
@@ -1003,13 +1027,60 @@ def calculate_sharpe_ratio(
     sharpe_ratio = (return_mean - rf_daily) / return_std * (252 ** 0.5)  # 年化夏普比率
     return round(sharpe_ratio, 4)
 
+def calculate_max_drawdown_ratio(
+        name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
+):
+    """
+    ### 计算最大回撤比率(Max Drawdown Ratio)
+    #### :param name: 策略名称, oversold or downgap
+    #### :param start: 开始日期,'YYYYMMDD' 格式, 默认为 None (从最早数据开始)
+    #### :param end: 结束日期,'YYYYMMDD' 格式, 默认为 None (到最新数据为止)
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: 最大回撤比率
+    #### NOTE:
+    #### 最大回撤比率 = 最大回撤 / 峰值
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        trade_root = f'{TRADE_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
+        trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
+    indicator_csv = f'{trade_root}/statistic_indicator.csv'
+    if not os.path.exists(indicator_csv):
+        return 0.0
+    indicator_df = pd.read_csv(indicator_csv, dtype={'trade_date': str})
+    if start is not None:
+        indicator_df = indicator_df[indicator_df['trade_date'] >= start]
+    if end is not None:
+        indicator_df = indicator_df[indicator_df['trade_date'] <= end]
+    if indicator_df.empty:
+        return 0.0
+    indicator_df = indicator_df.sort_values(by='trade_date', ascending=True)
+    indicator_df = indicator_df.reset_index(drop=True)
+    cumulative_return = (1 + indicator_df['return_ratio']).cumprod()
+    rolling_max = cumulative_return.cummax()
+    drawdown = (cumulative_return - rolling_max) / rolling_max
+    max_drawdown = drawdown.min()
+    return round(abs(max_drawdown), 4)
+
 ### 缺口统计相关函数
 def get_all_gaps_statistic_general_infomation() -> pd.DataFrame | None:
     """
-    获取所有缺口的统计信息
-    :return: DataFrame with statistics or None if no data
-    NOTE:
-    统计信息包括:
+    ### 获取所有缺口的统计信息
+    #### :return: DataFrame with statistics or None if no data
+    #### NOTE:
+    #### 统计信息包括:
     - total_gaps: 总缺口数量
     - filled_gaps: 已回补的缺口数量
     - gaps_filled_rate: 全部缺口回补率
@@ -1019,7 +1090,7 @@ def get_all_gaps_statistic_general_infomation() -> pd.DataFrame | None:
     - up_gaps: 向上缺口数量
     - filled_up_gaps: 已回补的向上缺口数量
     - up_gaps_filled_rate: 向上缺口回补率
-    返回 DataFrame 格式如下(20250930数据):
+    #### 返回 DataFrame 格式如下(20250930数据):
     | total_gaps | filled_gaps | gaps_filled_rate  | down_gaps | filled_down_gaps  | down_gaps_filled_rate | up_gaps | filled_up_gaps | up_gaps_filled_rate |
     |------------|-------------|-------------------|-----------|-------------------|-----------------------|---------|----------------|---------------------|
     | 530874     | 507351      | 0.9557            | 258177    | 250720            | 0.9711                | 272697  | 256631         | 0.9411              |
@@ -1057,17 +1128,17 @@ def get_gaps_earning_to_days_probability(
         rate0: float = 0.06, step: float = 0.02, times: int = 3
 ) -> pd.DataFrame | None:
     """
-    计算指定类型的缺口在小于 trade_days 时，涨幅大于 rate0序列的概率
-    : param trade_days: 交易天数
-    : param gap: 缺口类型
-    : param rate0: 起始涨幅
-    : param step: 涨幅步长
-    : param times: 涨幅步长次数
-    : return: 概率
-    NOTE:
-    例如: trade_days=60, gap='down', rate0=0.10, step=0.02, times=5
-    计算在所有向下缺口中, 60天内涨幅大于 10%、12%、14%、16%、18%的概率
-    返回 DataFrame 格式如下(20250930数据):
+    ### 计算指定类型的缺口在小于 trade_days 时，涨幅大于 rate0序列的概率
+    #### : param trade_days: 交易天数
+    #### : param gap: 缺口类型
+    #### : param rate0: 起始涨幅
+    #### : param step: 涨幅步长
+    #### : param times: 涨幅步长次数
+    #### : return: 概率
+    #### NOTE:
+    #### 例如: trade_days=60, gap='down', rate0=0.10, step=0.02, times=5
+    #### 计算在所有向下缺口中, 60天内涨幅大于 10%、12%、14%、16%、18%的概率
+    #### 返回 DataFrame 格式如下(20250930数据):
     | trade_days | gap  | rate | count  | total  | probability |
     |------------|------|------|--------|--------|-------------|
     | 60         | down | 0.10 | 101261 | 211534 | 0.4789      |
@@ -1118,13 +1189,13 @@ def get_gaps_agg_days_information_groupby_rate(
         rate0: float = 0.08, step: float = 0.01, times: int = 12
 ) -> pd.DataFrame | None:
     """
-    按照对缺口的 rise_percent 分组后统计 days 的信息
-    : param gap: 缺口类型
-    : param rate0: 起始涨幅
-    : param step: 涨幅步长
-    : param times: 涨幅步长次数
-    : return: DataFrame with grouped statistics or None if no data
-    NOTE:
+    ### 按照对缺口的 rise_percent 分组后统计 days 的信息
+    #### : param gap: 缺口类型
+    #### : param rate0: 起始涨幅
+    #### : param step: 涨幅步长
+    #### : param times: 涨幅步长次数
+    #### : return: DataFrame with grouped statistics or None if no data
+    #### NOTE:
     - days 统计方法: count, mean, median, min, max, quantile(0.75), quantile(0.90)
     - 以下是rate0=0.05, step=0.05, times=5的输出, 返回 DataFrame 格式如下(20250930数据):
     | rise_percent_group | count_days | mean_days | median_days | quantile_75_days | quantile_90_days | min_days | max_days |

@@ -18,6 +18,11 @@ temp_root = os.path.join(TEMP_DIR, 'downgap')
 os.makedirs(temp_root, exist_ok=True)
 
 def calculate_and_fill_rsi_indicator(df: pd.DataFrame, period: int = 14):
+    """
+    ### 计算RSI指标并填充到df中
+    #### :param df: DataFrame, 包含pct_chg列
+    #### :param period: 计算RSI的周期, 默认14天
+    """
     for i in range(len(df)):
         if i < period:
             continue
@@ -28,6 +33,11 @@ def calculate_and_fill_rsi_indicator(df: pd.DataFrame, period: int = 14):
         df.loc[i, f'RSI{period}'] = round(rsi, 2)
 
 def calculate_and_fill_k_indicator(df: pd.DataFrame, period: int = 14):
+    """
+    ### 计算K指标并填充到df中
+    #### :param df: DataFrame, 包含close, high, low列
+    #### :param period: 计算K的周期, 默认14天
+    """
     for i in range(len(df)):
         if i < period:
             continue
@@ -38,6 +48,11 @@ def calculate_and_fill_k_indicator(df: pd.DataFrame, period: int = 14):
         df.loc[i, 'K'] = round(k, 2)
 
 def calculate_and_fill_map_indicator(df: pd.DataFrame, period: int = 14):
+    """
+    ### 计算MAP指标并填充到df中
+    #### :param df: DataFrame, 包含close列
+    #### :param period: 计算MAP的周期, 默认14天
+    """
     for i in range(len(df)):
         if i < period:
             continue
@@ -46,8 +61,8 @@ def calculate_and_fill_map_indicator(df: pd.DataFrame, period: int = 14):
 
 def get_gaps_statistic_data(code: str):
     """ 
-    获取股票和指数缺口及回补情况
-    :param code: 股票代码, 例如: '600000' or '000001.SH'
+    ### 获取股票和指数缺口及回补情况
+    #### :param code: 股票代码, 例如: '600000' or '000001.SH'
     """
     if len(code) == 6:
         code = f'{code}.SH' if code.startswith('6') else f'{code}.SZ'
@@ -188,9 +203,11 @@ def get_gaps_statistic_data(code: str):
 
 def refresh_the_gap_csv(code: str):
     """
-    replace gap csv data  
-    :param code: stock code like 600000 or 600000.SH
-    NOTE: delete duplicate data and check gap filled or not
+    ### 更新缺口数据集
+    #### :param code: 股票代码, 格式为 600000 or 600000.SH
+    #### NOTE: 
+    #### 删除重复的trade_date行, 并检查缺口是否回补
+    #### 更新fdays, fill_date和rise_percent列
     """
     if len(code) == 6:
         code = f'{code}.SH' if code.startswith('6') else f'{code}.SZ'
@@ -261,6 +278,10 @@ def refresh_the_gap_csv(code: str):
 
 # 把gap_data目录下的所有csv文件合并到一个csv文件
 def merge_all_gap_data(max_trade_days: int):
+    """
+    ### 合并指定天数组下所有缺口数据到一个csv文件
+    #### :param max_trade_days: 指定合并的天数
+    """
     dest_dir = f'{temp_root}/max_trade_days_{max_trade_days}'
     os.makedirs(dest_dir, exist_ok=True)
     all_gaps_csv = os.path.join(f'{dest_dir}', 'all_gap_data.csv')

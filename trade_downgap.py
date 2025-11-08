@@ -24,6 +24,10 @@ lock = Lock()
 trade_loggers = {}
 
 def get_trade_logger(trade_log_path):
+    """
+    ### 获取交易日志对象
+    #### :param trade_log_path: 交易日志文件路径
+    """
     if trade_log_path not in trade_loggers:
         logger = logging.getLogger(trade_log_path)
         logger.setLevel(logging.INFO)
@@ -36,10 +40,9 @@ def get_trade_logger(trade_log_path):
 
 def get_holding_stocks_number(max_trade_days: int) -> int:
     """
-    get holding stocks number and set signal to
-    control the number of holding stocks
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
-    :return: number of holding stocks
+    ### 获取指定交易组当前持仓股票数
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### :return: 当前持仓股票数量
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -59,13 +62,13 @@ for days in dataset_group_cons['common'].get('MAX_TRADE_DAYS_LIST'):
 # buy in and sell out
 def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: float, max_trade_days) -> None:
     """
-    buy in stock
-    :param code: stock code, like 000001 or 000001.SH
-    :param price: stock price
-    :param amount: stock amount
-    :param trade_date: trade date link to gap, like '20210804'
-    :param target_price: target price link to gap
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
+    ### 买入股票
+    #### :param code: 股票代码, 格式为 000001 或者 000001.SZ
+    #### :param price: 买入价格
+    #### :param amount: 买入数量
+    #### :param trade_date: 买入缺口的交易日期, 标记缺口的唯一性
+    #### :param target_price: 缺口的目标价格
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
     """
     COST_FEE = dataset_group_cons['common'].get('COST_FEE')
     for group in dataset_group_cons:
@@ -141,12 +144,12 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: 
 
 def sell_out(code: str, price: float, trade_date: str, max_trade_days) -> None:
     """
-    sell out stock
-    :param code: stock code, like 000001 or 000001.SH
-    :param price: stock price
-    :param amount: stock amount
-    :param trade_date: trade date link to gap, like '20210804'
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
+    ### 卖出股票
+    #### :param code: 股票代码, 格式为 000001 或者 000001.SZ
+    #### :param price: 卖出价格
+    #### :param amount: 卖出数量
+    #### :param trade_date: 买入缺口的交易日期, 标记缺口的唯一性
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
     """
     for group in dataset_group_cons:
         if str(max_trade_days) in group:
@@ -213,10 +216,10 @@ def sell_out(code: str, price: float, trade_date: str, max_trade_days) -> None:
 
 def calculate_buy_in_amount(funds, price) -> int | None:
     """
-    calculate buy_in amount
-    :param funds: funds to buy in
-    :param price: stock price
-    :return: buy_in amount
+    ### 计算买入数量
+    #### :param funds: 可用资金
+    #### :param price: 股票价格
+    #### :return: 买入数量
     """
     COST_FEE = dataset_group_cons['common'].get('COST_FEE')
     if funds is None or price is None or price <= 0:
@@ -228,9 +231,9 @@ def calculate_buy_in_amount(funds, price) -> int | None:
 
 def create_daily_profit_list(max_trade_days):
     """
-    create and update daily profit list
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
-    NOTE: contains columns: trade_date, profit, delta
+    ### 创建和更新每日收益列表
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### NOTE: 包含的列名: trade_date, profit, delta
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -269,12 +272,12 @@ def create_daily_profit_list(max_trade_days):
 
 def create_or_update_funds_change_list(funds: float, note: str, max_trade_days: int) -> bool:
     """
-    create or refresh funds change list
-    :param funds: funds to add or reduce
-    :param note: note for funds change
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
-    :return: True if success, False if failed
-    NOTE: contains columns: datetime, amount, balance, note
+    ### 创建或更新资金变动列表
+    #### :param funds: 资金变动金额, 正数为增加, 负数为减少
+    #### :param note: 备注
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### :return: 成功返回True, 失败返回False(余额不足)
+    #### :包含的列名: datetime, amount, balance, note
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -300,11 +303,11 @@ def create_or_update_funds_change_list(funds: float, note: str, max_trade_days: 
 
 def create_holding_list(max_trade_days: int):
     """
-    build holding list
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
-    NOTE: contains columns:
-    ts_code, stock_name, industry, trade_date, fill_date, date_in, date_out, days(trade days), 
-    holding_days(calender days), target_price, price_in, price_out, amount, rate_current, rate_yearly, status
+    ### 创建持仓列表
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### NOTE: 包含的列名:
+    #### ts_code, stock_name, industry, trade_date, fill_date, date_in, date_out, days(trade days), 
+    #### holding_days(calender days), target_price, price_in, price_out, amount, rate_current, rate_yearly, status
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -322,6 +325,10 @@ def create_holding_list(max_trade_days: int):
 
 # 持续扫描buy_in_list.csv, 买入股票
 def scan_buy_in_list(max_trade_days:int):
+    """
+    ### 扫描买入列表, 买入股票
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    """
     MIN_STOCK_PRICE = dataset_group_cons['common'].get('MIN_STOCK_PRICE')
     additionl_rate = dataset_group_cons['common'].get('additionl_rate')
     for group in dataset_group_cons:
@@ -357,17 +364,15 @@ def scan_buy_in_list(max_trade_days:int):
 
     def calculate_gaps_buy_in_points(code: str) -> float | None:
         """
-        buy_in_list中同一只股票存在多个缺口可买入时,计算每个缺口的买点
-        :param code: stock code
-        :return: 返回每个缺口的买点(全部买点的最低值)。如果全部缺口已买入,或者存在三个
-        以上缺口未买入,则返回None。
-        NOTE:
-        如果只存在一个缺口,返回该缺口的买点。
-        如果同时存在两个缺口,且均未买入,返回二个缺口的买点及第二个缺口中的最低值。
-        如果同时存在三个以上缺口,且均未买入,返回三个缺口的买点中的最低值。
-        如果缺口连续跌停,则返回买点和最后一个缺口跌停价的最低值。
-        如果同时存在三个以上未买入的缺口,作为异常处理,返回None。
-        当存在多个缺口未买入时,只要买点,则全部缺口一起买入。这比较符合常识。
+        ### buy_in_list中同一只股票存在多个缺口可买入时,计算每个缺口的买点
+        #### :param code: 股票代码
+        #### :return: 返回每个缺口的买点(全部买点的最低值)。如果全部缺口已买入,或者存在三个以上缺口未买入,则返回None。
+        #### NOTE:
+        #### 如果只存在一个缺口,返回该缺口的买点。
+        #### 如果同时存在两个缺口,且均未买入,返回二个缺口的买点中的最低值。
+        #### 如果同时存在三个以上缺口,且均未买入,返回三个缺口的买点中的最低值。
+        #### 如果缺口连续跌停,则返回最低买点和最后一个缺口跌停价的较低值。
+        #### 如果同时存在三个以上未买入的缺口,作为异常处理,返回None。
         """
         gaps_df = buy_in_df[buy_in_df['ts_code'] == code]
         up_limit_rate = get_up_down_limit(code=code)[2]
@@ -429,6 +434,20 @@ def scan_buy_in_list(max_trade_days:int):
             return None
 
     def scan_buy_in_list_row(idx_row):
+        """
+        ### 扫描买入列表的一行, 买入股票
+        #### :param idx_row: 行索引和行数据
+        #### 买入逻辑:
+        - 未获取到实时价格不买入
+        - 价格低于最低股票价格不买入
+        - 停牌不买入
+        - 下跌过程中不买入
+        - 跌停不买入
+        - 已经持仓股票数达到上限不买入
+        - 如果预期收益率大于最低收益率的30%,单笔买入资金提高15%
+        - 如果同一只股票存在多个缺口未买入时,重新计算确定每个缺口的买点p后判断是否买入
+        - 如果现价买入后回补缺口的收益率小于buy_in_list中的预期收益率的 PRED_RATE_PCT 倍,不买入
+        """
         i, row = idx_row
         code = row['ts_code']
         name = row['stock_name']
@@ -509,9 +528,11 @@ def scan_buy_in_list(max_trade_days:int):
 
 # 持续刷新holding_list.csv
 def refresh_holding_list(max_trade_days: int):
-    """ 
-    refresh columns: fill_date, days, holding_days, price_now, profit, rate_current, rate_yearly
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
+    """
+    ### 刷新持仓列表
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### NOTE:
+    #### 刷新的列: fill_date, days, holding_days, price_now, profit, rate_current, rate_yearly
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -535,8 +556,8 @@ def refresh_holding_list(max_trade_days: int):
 
     def refresh_holding_list_row(idx_row):
         """
-        refresh holding list single row infomation
-        :param idx_row: index, row
+        ### 刷新持仓列表单行信息
+        #### :param idx_row: index, row
         """
         i, row = idx_row
         try:
@@ -638,8 +659,8 @@ def refresh_holding_list(max_trade_days: int):
 # 持续扫描holding_list.csv, 卖出股票
 def scan_holding_list(max_trade_days: int):
     """
-    scan holding list, sell out stocks
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
+    ### 扫描持仓列表, 卖出股票
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -667,6 +688,22 @@ def scan_holding_list(max_trade_days: int):
         # prices_dict = asyncio.run(get_all_prices_async(ts_codes))
     
     def scan_holding_list_row(idx_row):
+        """
+        ### 刷新持仓列表单行信息
+        #### :param idx_row: index, row
+        #### 卖出逻辑:
+        - 未获取到实时价格不卖出
+        - 如果已经卖出不处理
+        - 持有天数为1天不卖出(当天买入当天不卖出)
+        - 停牌不卖出
+        - 上涨不卖出
+        - 涨停不卖出
+        - 如果缺口回补到目标价或者缺口已回补,卖出
+        - 如果达到最大跌幅限制(止损点),卖出
+        - 如果持有天数超过最大交易天数, 卖出
+        - 已经达到最大交易天数但亏损持仓不卖出, 延期等待
+        - 如果触发提前卖出标准,卖出
+        """
         i, row = idx_row
         ts_code = row['ts_code']
         stock_name = row['stock_name']
@@ -742,11 +779,12 @@ def scan_holding_list(max_trade_days: int):
 
 def XD_buy_in_list_bak(max_trade_days: int):
     """
-    盘中前复权 target_price, 即 trade_date 前一日的最低价
-    NOTE:
-    save the result to XD_RECORD_BUY_IN_CSV(only one row),
-    XD_RECORD_BUY_IN_CSV contains columns: today, xd_or_not
-    NOTE: 已弃用
+    ### 盘中前复权 target_price, 即 trade_date 前一日的最低价
+    #### NOTE:
+    #### 保存结果到 XD_RECORD_BUY_IN_CSV(只有一行), 标记当日是否已复权过
+    #### XD_RECORD_BUY_IN_CSV 包含列名: today, xd_or_not
+    #### NOTE: 
+    #### 该函数已弃用
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -806,7 +844,8 @@ def XD_buy_in_list_bak(max_trade_days: int):
 
 def XD_buy_in_list(max_trade_days: int):
     """
-    盘中前复权 target_price, 即 trade_date 前一日的最低价
+    ### 盘中前复权 target_price, 即 trade_date 前一日的最低价
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -857,13 +896,13 @@ def XD_buy_in_list(max_trade_days: int):
 
 def XD_holding_list_bak(max_trade_days: int):
     """
-    盘中前复权 target_price 和 price_in, 对 amount 进行股数调整
-    前复权和股数调整记录在 XD_RECORD_HOLDING_CSV 中
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
-    NOTE:
-    XD_RECORD_CSV contains columns: ts_code, trade_date, pre_trade_date, xd_date, target_price, 
-    price_in, amount, xd_target_price, xd_price_in, xd_amount
-    NOTE: 已弃用   
+    ### 盘中前复权 target_price 和 price_in, 对 amount 进行股数调整
+    #### 前复权和股数调整记录在 XD_RECORD_HOLDING_CSV 中
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### NOTE:
+    #### XD_RECORD_CSV contains columns: ts_code, trade_date, pre_trade_date, xd_date, target_price, 
+    #### price_in, amount, xd_target_price, xd_price_in, xd_amount
+    #### NOTE: 已弃用
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -959,9 +998,9 @@ def XD_holding_list_bak(max_trade_days: int):
 
 def XD_holding_list(max_trade_days: int):
     """
-    盘中前复权HOLDING_LIST中 target_price 和 price_in, 对 amount 进行股数调整
-    从买入的原始记录 HOLDING_LIST_ORIGIN 中获取数据结合复权因子进行复权
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
+    ### 盘中前复权HOLDING_LIST中 target_price 和 price_in, 对 amount 进行股数调整
+    ### 从买入的原始记录 HOLDING_LIST_ORIGIN 中获取数据结合复权因子进行复权
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
     """
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
@@ -1027,10 +1066,10 @@ def XD_holding_list(max_trade_days: int):
 
 def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade'):
     """
-    trade logic process
-    :param max_trade_days: dataset group_id, like 50, 45, 40, etc.
-    :param mode: 'trade' or 'test'
-    NOTE:
+    ### 交易流程(交易/测试)
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### :param mode: 'trade' or 'test'
+    #### NOTE:
     - 'trade' 模式下, 在实际交易时间内执行交易逻辑。
     - 'test' 模式下, 在非交易时间执行交易逻辑, 主要为了检测交易逻辑是否正确。
     """

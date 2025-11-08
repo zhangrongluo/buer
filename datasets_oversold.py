@@ -10,9 +10,9 @@ from utils import get_qfq_price_DF_by_adj_factor
 
 def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
     """
-    计算RSI指标
-    :param df: DataFrame
-    :param period: 计算周期
+    ### 计算RSI指标
+    #### :param df: DataFrame, 包含pct_chg列
+    #### :param period: 计算周期, 默认14天
     """
     if len(df) < period:
         return None
@@ -26,10 +26,10 @@ def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
 
 def calculate_K_indicator(df: pd.DataFrame, period: int = 14):
     """
-    计算K指标
-    :param df: DataFrame
-    :param period: 计算周期
-    NOTE: K = 100 * (close - min) / (max - min)
+    ### 计算K指标
+    #### :param df: DataFrame, 包含close, high, low列
+    #### :param period: 计算周期, 默认14天
+    #### NOTE: K = 100 * (close - min) / (max - min)
     """
     if len(df) < period:
         return None
@@ -44,11 +44,11 @@ def calculate_K_indicator(df: pd.DataFrame, period: int = 14):
 
 def calculate_MAP_indicator(df: pd.DataFrame, period: int = 15) -> float:
     """
-    计算移动平均价格指标
-    :param df: DataFrame
-    :param period: 计算周期
-    NOTE: 
-    MAP = sum(close) / period
+    ### 计算移动平均价格指标
+    #### :param df: DataFrame, 包含close列
+    #### :param period: 计算周期, 默认15天
+    #### NOTE: 
+    #### MAP = sum(close) / period
     """
     if len(df) < period:
         return None
@@ -58,12 +58,12 @@ def calculate_MAP_indicator(df: pd.DataFrame, period: int = 15) -> float:
 
 def create_stock_max_down_dataset(params: tuple):
     """ 
-    计算创建股票的指定期间最大下跌幅度数据集
-    :param params: 参数列表,包括code, FORWARD_DAYS, BACKWARD_DAYS, DOWN_FILTER
-    code: 股票代码, 例如 '600848' 或 '600848.SH'
-    FORWARD_DAYS: 向前的天数(包含基准日)
-    BACKWARD_DAYS: 向后的天数(不包含基准日)
-    DOWN_FILTER: 最大下跌幅度的过滤条件
+    ### 计算创建股票的指定期间最大下跌幅度数据集
+    #### :param params: 参数列表,包括code, FORWARD_DAYS, BACKWARD_DAYS, DOWN_FILTER
+    #### code: 股票代码, 例如 '600848' 或 '600848.SH'
+    #### FORWARD_DAYS: 向前的天数(包含基准日)
+    #### BACKWARD_DAYS: 向后的天数(不包含基准日)
+    #### DOWN_FILTER: 最大下跌幅度的过滤条件
     """
     code, FORWARD_DAYS, BACKWARD_DAYS, DOWN_FILTER = params
     oversold_root = f'{DATASETS_DIR}/oversold'
@@ -205,14 +205,14 @@ def create_stock_max_down_dataset(params: tuple):
 
 def refresh_oversold_data_csv(params: tuple):
     """
-    刷新oversold数据集csv文件
-    :param params: 参数列表,包括code, FORWARD_DAYS, BACKWARD_DAYS, DOWN_FILTER
-    code: 股票代码, 例如 '600848' 或 '600848.SH'
-    FORWARD_DAYS: 向前的天数(包含基准日)
-    BACKWARD_DAYS: 向后的天数(不包含基准日)
-    DOWN_FILTER: 最大下跌幅度的过滤条件
-    NOTE: 
-    删除重复行、检查标签空白行是否已经经过了BACKWARD_DAYS个交易日, 计算向后的最大涨幅
+    ### 刷新oversold数据集csv文件
+    #### :param params: 参数列表,包括code, FORWARD_DAYS, BACKWARD_DAYS, DOWN_FILTER
+    #### code: 股票代码, 例如 '600848' 或 '600848.SH'
+    #### FORWARD_DAYS: 向前的天数(包含基准日)
+    #### BACKWARD_DAYS: 向后的天数(不包含基准日)
+    #### DOWN_FILTER: 最大下跌幅度的过滤条件
+    #### NOTE: 
+    #### 删除重复行、检查标签空白行是否已经经过了BACKWARD_DAYS个交易日, 计算向后的最大涨幅
     """
     code, FORWARD_DAYS, BACKWARD_DAYS, DOWN_FILTER = params
     oversold_root = f'{DATASETS_DIR}/oversold'
@@ -280,10 +280,10 @@ def refresh_oversold_data_csv(params: tuple):
 # 把oversold_dataset_dir下的所有csv文件合并成一个csv文件
 def merge_all_oversold_dataset(forward_days, backward_days, down_filter):
     """
-    :param forward_days: 向前的天数(包含基准日)
-    :param backward_days: 向后的天数(不包含基准日)
-    :param down_filter: 最大下跌幅度的过滤条件
-    合并所有的oversold数据集csv文件
+    ### 合并所有的oversold数据集csv文件
+    #### :param forward_days: 向前的天数(包含基准日)
+    #### :param backward_days: 向后的天数(不包含基准日)
+    #### :param down_filter: 最大下跌幅度的过滤条件
     """
     oversold_root = f'{DATASETS_DIR}/oversold'
     oversold_dataset_dir = f'{oversold_root}/oversolddata_{forward_days}_{backward_days}_{-down_filter:.2f}'

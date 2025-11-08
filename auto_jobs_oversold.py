@@ -5,21 +5,20 @@ import datetime
 import random
 import shutil
 from tensorflow.keras import layers  # type: ignore
-import math
 import pandas as pd  # type: ignore
 from tensorflow import keras  
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
-from utils import calculate_today_series_statistic_indicator, check_pre_trade_data_update_status, send_wechat_message_via_bark
+from utils import calculate_today_series_statistic_indicator, check_pre_trade_data_update_status, send_wechat_message_via_bark, check_daily_temp_data_update_status
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
 from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indicator, update_all_daily_simple_quant_factor, update_all_adj_factor_data,
                                     download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, 
                                     download_all_stocks_daily_temp_indicator_data, download_all_stocks_daily_simple_temp_quant_factor)
-from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, clear_buy_in_list
+from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list
 from cons_hidden import bark_device_key
 from cons_general import TEMP_DIR, BASICDATA_DIR, TRADE_CAL_CSV, PREDICT_DIR, MODELS_DIR, TRADE_DIR, BACKUP_DIR
 from cons_oversold import (dataset_to_update, dataset_to_predict_trade, dataset_to_train, exception_list, MIN_PRED_RATE, 
-                           TEST_DATASET_PERCENT, MODEL_NAME, DROP_ROWS_CSV, BUY_IN_LIST_ORIGIN)
+                           TEST_DATASET_PERCENT, MODEL_NAME, BUY_IN_LIST_ORIGIN)
 from datasets_oversold import create_stock_max_down_dataset, refresh_oversold_data_csv, merge_all_oversold_dataset
 
 import warnings
@@ -467,9 +466,6 @@ def update_and_predict_dataset():
 @is_trade_day(task='构建买入清单')
 def build_buy_in_list_task():
     build_buy_in_list()
-    drop_rows = clear_buy_in_list()
-    if drop_rows is not None:
-        drop_rows.to_csv(DROP_ROWS_CSV, index=False)
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} 买入清单更新完成！')
 
@@ -488,7 +484,7 @@ def download_and_update_adj_data_task():
     update_all_adj_factor_data()
     print(f'({MODEL_NAME}) {today} 复权因子数据更新完成！')
 
-@is_trade_day(task='盘中前复权和股数调整')
+@is_trade_day(task='盘前前复权和股数调整')
 def XD_stock_list_task():
     XD_buy_in_list()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
@@ -496,10 +492,15 @@ def XD_stock_list_task():
     XD_holding_list()
     print(f'({MODEL_NAME}) {today} 持有清单前复权和股数调整完成！')
 
-@is_trade_day(task='检查交易前数据更新状态')
+@is_trade_day(task='检查盘前数据更新状态')
 def check_pre_trade_data_update_status_task():
     status = check_pre_trade_data_update_status()
-    send_wechat_message_via_bark(device_key=bark_device_key, message=status, title='检查交易前数据更新状态')
+    send_wechat_message_via_bark(device_key=bark_device_key, message=status, title='检查盘前数据更新状态')
+
+@is_trade_day(task='检查盘后数据更新状态')
+def check_daily_temp_data_update_status_task():
+    status = check_daily_temp_data_update_status()
+    send_wechat_message_via_bark(device_key=bark_device_key, message=status, title='检查盘后数据更新状态')
 
 @is_trade_day(task='计算今日统计指标')
 def calculate_today_statistics_indicators():
@@ -682,6 +683,12 @@ def auto_run():
         trigger='cron',
         hour=17, minute=45, misfire_grace_time=300,
         id='update_and_predict_dataset'
+    )
+    scheduler.add_job(
+        check_daily_temp_data_update_status_task,
+        trigger='cron',
+        hour=19, minute=15, misfire_grace_time=300,
+        id='check_daily_temp_data_update_status_task'
     )
     scheduler.add_job(
         train_and_predict_dataset,

@@ -1,5 +1,5 @@
 """
-download and update daily data and daily indicator data for all stocks
+下载更新全部股票的每日交易数据、每日指标数据、复权因子数据、分红数据等基础数据
 basic_data.py 通过股票代码依次更新数据，每只股票下载一次，可更新多日数据。慢易遗漏
 basic_data_alt_edition.py 通过全部股票每日数据更新，全部股票下载一次，每次只能更新一天。快且全面
 """
@@ -24,11 +24,10 @@ all_stocks_info = get_all_stocks_info()
 
 def download_all_stocks_daily_temp_data(trade_date: str = None):
     """
-    download all stock's daily temp data from tushare for update
-    :param trade_date: trade date in 'YYYYMMDD' format, default is today
-    :return: None
-    NOTE:
-    如失败则等待120秒后重试,最多重试3次
+    ### 从 tushare 下载所有股票的每日临时交易数据(全部股票一张表)
+    #### :param trade_date: 交易日期 'YYYYMMDD' 格式, 默认为今天
+    #### NOTE:
+    #### 如失败则等待120秒后重试,最多重试3次
     """
     # 临时存放每日数据的目录 dailydata
     dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
@@ -47,11 +46,11 @@ def download_all_stocks_daily_temp_data(trade_date: str = None):
 
 def download_all_stocks_daily_temp_indicator_data(trade_date: str = None):
     """
-    download all stock's daily temp indicator data from tushare for update
-    :param trade_date: trade date in 'YYYYMMDD' format, default is today
-    :return: None
-    NOTE:
-    如失败则等待120秒后重试,最多重试3次
+    ### 从 tushare 下载所有股票的每日临时指标数据(全部股票一张表)
+    #### :param trade_date: 交易日期 'YYYYMMDD' 格式, 默认为今天
+    #### :return: None
+    #### NOTE:
+    #### 如失败则等待120秒后重试,最多重试3次
     """
     # 临时存放每日数据的目录 dailyindicator 
     dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
@@ -70,11 +69,11 @@ def download_all_stocks_daily_temp_indicator_data(trade_date: str = None):
 
 def download_all_stocks_daily_temp_adjfactor_data(trade_date: str = None):
     """
-    download all stock's daily temp adjfactor data from tushare for update
-    :param trade_date: trade date in 'YYYYMMDD' format, default is today
-    :return: None
-    NOTE:
-    如失败则等待15秒后重试,最多重试3次
+    ### 从 tushare 下载所有股票的每日临时复权因子数据(全部股票一张表)
+    #### :param trade_date: 交易日期 'YYYYMMDD' 格式, 默认为今天
+    #### :return: None
+    #### NOTE:
+    #### 如失败则等待15秒后重试,最多重试3次
     """
     # 临时存放每日数据的目录 dailyadjfactor
     dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
@@ -93,12 +92,12 @@ def download_all_stocks_daily_temp_adjfactor_data(trade_date: str = None):
 
 def download_all_stocks_daily_simple_temp_quant_factor(trade_date: str = None):
     """
-    download all stock's daily temp quant factor data from tushare for update
-    :param trade_date: trade date in 'YYYYMMDD' format, default is today
-    :return: None
-    NOTE:
-    如失败则等待120秒后重试,最多重试3次
-    下载的是简版量化因子数据
+    ### 从 tushare 下载所有股票的每日临时简版量化因子数据(全部股票一张表)
+    #### :param trade_date: 交易日期 'YYYYMMDD' 格式, 默认为今天
+    #### :return: None
+    #### NOTE:
+    #### 如失败则等待120秒后重试,最多重试3次
+    #### 下载的是简版量化因子数据,生成MACD数据集使用
     """
     # 临时存放每日数据的目录 dailyquantfactor
     dailytemp_dir = os.path.join(BASICDATA_DIR, 'dailytemp')
@@ -117,9 +116,8 @@ def download_all_stocks_daily_simple_temp_quant_factor(trade_date: str = None):
 
 def download_daily_data(ts_code: str):
     """
-    download daily data from tushare
-    :param ts_code: stock code
-    :return: None
+    ### 从 tushare 下载指定股票的全部交易数据
+    #### :param ts_code: tushare 股票代码,格式为 600036 or 600036.SH
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
@@ -135,9 +133,11 @@ def download_daily_data(ts_code: str):
 
 def update_all_daily_data(step: int = 5):
     """
-    update daily data for all stocks
-    :param step: number of stocks to update at a time
-    :return: None
+    ### 更新所有股票的每日交易数据
+    #### :param step: 每个循环更新的股票数量
+    #### :return: None
+    #### NOTE:
+    #### 通过全部股票每日临时交易数据进行更新,如果本地无该股票数据则下载全部数据
     """
     dest_dir = f'{BASICDATA_DIR}/dailydata'
     os.makedirs(dest_dir, exist_ok=True)
@@ -145,15 +145,18 @@ def update_all_daily_data(step: int = 5):
         download_all_stocks_daily_temp_data()
     daily_data_temp_df = pd.read_csv(DAILY_DATA_TEMP_CSV, dtype={'trade_date': str})
     all_stocks = len(daily_data_temp_df)
+    if all_stocks == 0:
+        return
 
     def update_daily_data(idx_row):
         """
-        update daily data for all stocks
-        :param idx_row: contain one stock's daily data
+        更新全部股票的每日交易数据
+        :param idx_row: 每日零时交易数据表中的一行, 包含一只股票的每日交易数据
         :return: None
         """
         i, row = idx_row
         ts_code = row['ts_code']
+        trade_date = row['trade_date']
         if len(ts_code) == 6:
             ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
         dest_dir = f'{BASICDATA_DIR}/dailydata'
@@ -165,11 +168,7 @@ def update_all_daily_data(step: int = 5):
             return
         # update stock daily data
         df = pd.read_csv(dest_csv, dtype={'trade_date': str})
-        df = df.sort_values(by='trade_date', ascending=False)
-        df.reset_index(drop=True, inplace=True)  # 重置索引
-        last_trade_date = df.iloc[0]['trade_date']
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        if today == last_trade_date:
+        if trade_date in df['trade_date'].values:
             return
         msg = get_name_and_industry_by_code(ts_code)
         row = pd.DataFrame([row])
@@ -190,9 +189,9 @@ def update_all_daily_data(step: int = 5):
 
 def download_daily_indicator(ts_code: str):
     """
-    download daily indicator data from tushare
-    :param ts_code: stock code, 600036 or 600036.SH
-    :return: None
+    ### 从 tushare 下载指定股票的全部日指标数据
+    #### :param ts_code: tushare 股票代码,格式为 600036 or 600036.SH
+    #### :return: None
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
@@ -208,9 +207,11 @@ def download_daily_indicator(ts_code: str):
 
 def update_all_daily_indicator(step: int = 5):
     """
-    update daily indicator data for all stocks
-    :param step: number of stocks to update at a time
-    :return: None
+    ### 更新所有股票的每日指标数据
+    #### :param step: 每个循环更新的股票数量
+    #### :return: None
+    #### NOTE:
+    #### 通过全部股票每日临时指标数据进行更新,如果本地无该股票数据则下载全部数据
     """
     dest_dir = f'{BASICDATA_DIR}/dailyindicator'
     os.makedirs(dest_dir, exist_ok=True)
@@ -218,15 +219,18 @@ def update_all_daily_indicator(step: int = 5):
         download_all_stocks_daily_temp_indicator_data()
     daily_indicator_temp_df = pd.read_csv(DAILY_INDICATOR_TEMP_CSV, dtype={'trade_date': str})
     all_stocks = len(daily_indicator_temp_df)
+    if all_stocks == 0:
+        return
 
     def update_daily_indicator(idx_row):
         """
-        update daily indicator data for all stocks
-        :param idx_row: contain one stock's daily indicator data
+        更新全部股票的每日指标数据
+        :param idx_row: 每日零时指标数据表中的一行, 包含一只股票的每日指标数据
         :return: None
         """
         i, row = idx_row
         ts_code = row['ts_code']
+        trade_date = row['trade_date']
         if len(ts_code) == 6:
             ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
         dest_dir = f'{BASICDATA_DIR}/dailyindicator'
@@ -238,11 +242,7 @@ def update_all_daily_indicator(step: int = 5):
             return
         # update stock daily indicator data
         df = pd.read_csv(dest_csv, dtype={'trade_date': str})
-        df = df.sort_values(by='trade_date', ascending=False)
-        df.reset_index(drop=True, inplace=True)  # 重置索引
-        last_trade_date = df.iloc[0]['trade_date']
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        if today == last_trade_date:
+        if trade_date in df['trade_date'].values:
             return
         msg = get_name_and_industry_by_code(ts_code)
         row = pd.DataFrame([row])
@@ -263,9 +263,9 @@ def update_all_daily_indicator(step: int = 5):
 
 def download_dividend_data(ts_code: str) -> str | None:
     """
-    download dividend data from tushare
-    :param ts_code: stock code, 600036 or 600036.SH
-    :return: csv file path or None(fail)
+    ### 从 tushare 下载指定股票的分红数据
+    #### :param ts_code: tushare 股票代码,格式为 600036 or 600036.SH
+    #### :return: csv 文件路径或 None(失败)
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
@@ -283,9 +283,9 @@ def download_dividend_data(ts_code: str) -> str | None:
 
 def download_all_dividend_data(step: int = 5):
     """
-    download dividend data for all stocks
-    :param step: number of stocks to update one time
-    :return: None
+    ### 下载所有股票的分红数据
+    #### :param step: 每个循环更新的股票数量
+    #### :return: None
     """
     dest_dir = f'{FINANDATA_DIR}/dividend'
     os.makedirs(dest_dir, exist_ok=True)
@@ -299,12 +299,12 @@ def download_all_dividend_data(step: int = 5):
 
 def download_dividend_data_from_sina(ts_code: str) -> str | None:
     """
-    get dividend data from sina finance
-    :param ts_code: stock code, 600036 or 600036.SH
-    :return: csv file path or None(fail)
-    NOTE:
-    ts_code should be in the format of 600036.SH or 000036.SZ,
-    then 600036.SH -> 600036, 000036.SZ -> 000036
+    ### 从新浪财经获取指定股票的分红数据
+    #### :param ts_code: 股票代码, 格式为 600036 or 600036.SH
+    #### :return: csv 文件路径或 None(失败)
+    #### NOTE:
+    #### ts_code should be in the format of 600036.SH or 000036.SZ,
+    #### then 600036.SH -> 600036, 000036.SZ -> 000036
     """
     ts_code = ts_code[:6] if len(ts_code) == 9 else ts_code
     url = f'https://vip.stock.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/{ts_code}.phtml'
@@ -345,12 +345,12 @@ def download_dividend_data_from_sina(ts_code: str) -> str | None:
 
 def download_dividend_data_from_xueqiu(ts_code: str) -> str | None:
     """
-    get dividend data from xueqiu
-    :param ts_code: stock code, 600036 or 600036.SH
-    :return: csv file path or None(fail)
-    NOTE:
-    ts_code should be in the format of 600036.SH or 000036.SZ,
-    then 600036.SH -> SH600036, 000036.SZ -> SZ000036
+    ### 从雪球获取指定股票的分红数据
+    #### :param ts_code: 股票代码, 600036 or 600036.SH
+    #### :return: csv 文件路径或 None(失败)
+    #### NOTE:
+    #### ts_code should be in the format of 600036.SH or 000036.SZ,
+    #### then 600036.SH -> SH600036, 000036.SZ -> SZ000036
     """
     ts_code = f'SH{ts_code[:6]}' if ts_code[0] == '6' else f'SZ{ts_code[:6]}'
     url = f'https://xueqiu.com/snowman/S/{ts_code}/detail#/FHPS'
@@ -411,11 +411,12 @@ def download_dividend_data_from_xueqiu(ts_code: str) -> str | None:
 
 def download_dividend_data_in_multi_ways(ts_code: str) -> str | None:
     """
-    下载分红数据
-    :param ts_code: 股票代码, 如 000001 或 000001.SZ
-    :return: 下载的文件路径(成功)或者 None(失败)
-    NOTE: 
-    如果未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据
+    ### 使用多种方式下载指定股票的分红数据
+    #### :param ts_code: 股票代码, 如 000001 或 000001.SZ
+    #### :return: 下载的文件路径(成功)或者 None(失败)
+    #### NOTE: 
+    #### 如果未能从 tushare 下载到数据, 则继续从 sina 和 xueqiu 下载数据
+    #### 确保下载成功率最大化
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
@@ -430,9 +431,9 @@ def download_dividend_data_in_multi_ways(ts_code: str) -> str | None:
 
 def download_adj_factor_data(ts_code: str):
     """
-    download adj factor data from tushare
-    :param ts_code: stock code, 600036 or 600036.SH
-    :return: None
+    ### 从 tushare 获取指定股票的全部复权因子数据
+    #### :param ts_code: tushare 股票代码, 格式为 600036 or 600036.SH
+    #### :return: None
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
@@ -446,9 +447,11 @@ def download_adj_factor_data(ts_code: str):
 
 def update_all_adj_factor_data(step: int = 5):
     """
-    update or download(if not) adj factor data for all stocks
-    :param step: number of stocks to update at a time
-    :return: None
+    ### 更新所有股票的复权因子数据
+    #### :param step: 每次循环更新的股票数量
+    #### :return: None
+    #### NOTE:
+    #### 通过全部股票每日临时复权因子数据进行更新,如果本地无该股票数据则下载全部数据
     """
     dest_dir = f'{BASICDATA_DIR}/adjfactor'
     os.makedirs(dest_dir, exist_ok=True)
@@ -456,15 +459,18 @@ def update_all_adj_factor_data(step: int = 5):
         download_all_stocks_daily_temp_adjfactor_data()
     daily_adj_factor_temp_df = pd.read_csv(DAILY_ADJFACTOR_TEMP_CSV, dtype={'trade_date': str})
     all_stocks = len(daily_adj_factor_temp_df)
+    if all_stocks == 0:
+        return
 
     def update_adj_factor_data(idx_row):
         """
-        update or download(if not) adj factor data from last trade date to today
-        :param idx_row: index row of the stock
+        更新全部股票的复权因子数据
+        :param idx_row: 每日零时复权因子数据表中的一行, 包含一只股票的复权因子数据
         :return: None
         """
         i, row = idx_row
         ts_code = row['ts_code']
+        trade_date = row['trade_date']
         if len(ts_code) == 6:
             ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
         dest_dir = f'{BASICDATA_DIR}/adjfactor'
@@ -475,11 +481,7 @@ def update_all_adj_factor_data(step: int = 5):
             return
         # update stock adj factor data
         df = pd.read_csv(dest_csv, dtype={'trade_date': str})
-        df = df.sort_values(by='trade_date', ascending=False)
-        df.reset_index(drop=True, inplace=True)  # 重置索引
-        last_trade_date = df.iloc[0]['trade_date']
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        if today == last_trade_date:
+        if trade_date in df['trade_date'].values:
             return
         msg = get_name_and_industry_by_code(ts_code)
         row = pd.DataFrame([row])
@@ -500,9 +502,9 @@ def update_all_adj_factor_data(step: int = 5):
 
 def download_simple_quant_factor_data(ts_code: str):
     """
-    download simple quant factor data from tushare
-    :param ts_code: stock code, 600036 or 600036.SH
-    :return: None
+    ### 从 tushare 获取指定股票的全部简版量化因子数据
+    #### :param ts_code: 股票代码, 格式为 600036 or 600036.SH
+    #### :return: None
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
@@ -516,9 +518,11 @@ def download_simple_quant_factor_data(ts_code: str):
 
 def update_all_daily_simple_quant_factor(step: int = 5):
     """
-    update daily simple quant factor data for all stocks
-    :param step: number of stocks to update at a time
-    :return: None
+    ### 更新所有股票的简版量化因子数据
+    #### :param step: 每次循环更新的股票数量
+    #### :return: None
+    #### NOTE:
+    #### 通过全部股票每日临时简版量化因子数据进行更新,如果本地无该股票数据则下载全部数据
     """
     dest_dir = f'{BASICDATA_DIR}/dailyquantfactor'
     os.makedirs(dest_dir, exist_ok=True)
@@ -526,15 +530,18 @@ def update_all_daily_simple_quant_factor(step: int = 5):
         download_all_stocks_daily_simple_temp_quant_factor()
     daily_quant_factor_temp_df = pd.read_csv(DAILY_QUANT_FACTOR_TEMP_CSV, dtype={'trade_date': str})
     all_stocks = len(daily_quant_factor_temp_df)
+    if all_stocks == 0:
+        return
 
     def update_daily_simple_quant_factor(idx_row):
         """
-        update daily quant factor data for all stocks
-        :param idx_row: contain one stock's daily quant factor data
+        更新全部股票的简版量化因子数据
+        :param idx_row: 每日零时简版量化因子数据表中的一行, 包含一只股票的简版量化因子数据
         :return: None
         """
         i, row = idx_row
         ts_code = row['ts_code']
+        trade_date = row['trade_date']
         if len(ts_code) == 6:
             ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
         dest_dir = f'{BASICDATA_DIR}/dailyquantfactor'
@@ -546,11 +553,7 @@ def update_all_daily_simple_quant_factor(step: int = 5):
             return
         # update stock daily quant factor data
         df = pd.read_csv(dest_csv, dtype={'trade_date': str})
-        df = df.sort_values(by='trade_date', ascending=False)
-        df.reset_index(drop=True, inplace=True)  # 重置索引
-        last_trade_date = df.iloc[0]['trade_date']
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        if today == last_trade_date:
+        if trade_date in df['trade_date'].values:
             return
         msg = get_name_and_industry_by_code(ts_code)
         row = pd.DataFrame([row])

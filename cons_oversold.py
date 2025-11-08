@@ -3,12 +3,12 @@ MODEL_NAME = 'OversoldStrategy'
 TEST_DATASET_PERCENT = 0.15  # 测试集占训练集的比例
 MAX_TRADE_DAYS = 130  # 最大交易天数
 REST_TRADE_DAYS = 65  # 剩余交易天数=backward_days - waiting_days
-MIN_WAITING_DAYS = 7  # 最小等待天数, 一个下跌趋势最后一条记录的日期如果距离今天小于MIN_WAITING_DAYS，则不买入
+MIN_WAITING_DAYS = 8  # 最小等待天数, 一个下跌趋势最后一条记录的日期如果距离今天小于MIN_WAITING_DAYS，则不买入
 WAITING_RATE_PCT = 0.60  # 等待天数内，一个下跌趋势最大上涨幅度/预期收益率超过此值，则不买入
 MIN_PRED_RATE = 0.45  # 预期收益率下限，用于筛选交易数据集，预期收益率低于此收益率的数据集不列入交易清单
 PRED_RATE_PCT = 1.0  # 预期收益率折扣百分比
 SHUFFLE = False  # 是否打乱测试集
-COST_FEE = 0.0005  # 交易费用和佣金比例
+COST_FEE = 0.0001  # 申万宏源交易费用和佣金比例
 MAX_STOCKS = 40  # 最大持仓股票数
 ONE_TIME_FUNDS = 60000  # 单次买入资金
 MIN_STOCK_PRICE = 2.88 # 最低股票买入价格，低于此价格不买入
@@ -27,7 +27,6 @@ TRADE_LOG = f'{TRADE_DIR}/oversold/trade.log'  # 交易日志
 INDICATOR_CSV = f'{TRADE_DIR}/oversold/indicator.csv'  # 指标数据
 XD_RECORD_HOLDGING_CSV = f'{TRADE_DIR}/oversold/xd_record_holding.csv'  # 盘中前复权和股数调整记录
 XD_RECORD_BUY_IN_CSV = f'{TRADE_DIR}/oversold/xd_record_buy_in.csv'  # 盘中前复权记录
-DROP_ROWS_CSV = f'{TRADE_DIR}/oversold/drop_rows.csv'  # 买入清单中被删除的不符合要求的记录,理论上不应该存在此文件
 BUY_IN_LIST_ORIGIN = f'{TRADE_DIR}/oversold/buy_in_list_origin.csv'  # 原始买入清单
 HOLDING_LIST_ORIGIN = f'{TRADE_DIR}/oversold/holding_list_origin.csv'  # 原始持仓清单
 

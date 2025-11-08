@@ -30,34 +30,28 @@ trade_handle = logging.FileHandler(filename=TRADE_LOG, mode='a')
 trade_handle.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 trade_log.addHandler(trade_handle)
 
-def _get_holding_stocks_number() -> int:
+def get_holding_stocks_number() -> int:
     """
-    get holding stocks number and set signal to
-    control the number of holding stocks
-    NOTE:
-    signal is HOLDING_STOCKS, signal += 1 when buy in, signal -= 1 when sell out
+    ### 获取当前持仓股票数
     """
     if not os.path.exists(HOLDING_LIST):
         return 0
     holding_df = pd.read_csv(HOLDING_LIST)
     holding_stocks = holding_df[holding_df['status'] == 'holding'].shape[0]
     return holding_stocks
-HOLDING_STOCKS = _get_holding_stocks_number()
+HOLDING_STOCKS = get_holding_stocks_number()
 print(f'({MODEL_NAME}) HOLDING_STOCKS is {HOLDING_STOCKS} now')
 
 # buy in and sell out
 def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base: float, target_rate: float) -> None:
     """
-    buy in stock
-    :param code: stock code, like 000001 or 000001.SH
-    :param price: stock price
-    :param amount: stock amount
-    :param trade_date: trade date link to row, like '20210804'
-    :param buy_point_base: target price link to row
-    :param target_rate: target rate link to row
-    NOTE: 
-    the last second parameters are used to carry more information for holding_list.csv,
-    but it is not necessary to use them in the function.
+    ### 买入股票
+    #### :param code: 股票代码, 格式为 000001 or 000001.SZ
+    #### :param price: 买入价格
+    #### :param amount: 买入数量
+    #### :param trade_date: 交易日期, 标记下跌趋势的买入点, 用于识别买入清单中的特定的行
+    #### :param buy_point_base: 买入基准点, 即交易日期当天的收盘价
+    #### :param target_rate: 目标收益率, 买入清单中 oversold 模型推理得到的
     """
     if len(code) != 9:
         code = code +'.SH' if code.startswith('6') else code + '.SZ'
@@ -117,11 +111,11 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base
 
 def sell_out(code: str, price: float, trade_date: str) -> None:
     """
-    sell out stock
-    :param code: stock code, like 000001 or 000001.SH
-    :param price: stock price
-    :param amount: stock amount
-    :param trade_date: trade date link to row, like '20210804'
+    ### 卖出股票
+    #### :param code: 股票代码, 格式为 000001 或者 000001.SZ
+    #### :param price: 卖出价格
+    #### :param amount: 卖出数量
+    #### :param trade_date: 交易日期, 标记下跌趋势的买入点, 用于识别持有清单中的具体持仓记录
     """
     if len(code) != 9:
         code = code +'.SH' if code.startswith('6') else code + '.SZ'
@@ -183,10 +177,10 @@ def sell_out(code: str, price: float, trade_date: str) -> None:
 
 def calculate_buy_in_amount(funds, price) -> int | None:
     """
-    calculate buy_in amount
-    :param funds: funds to buy in
-    :param price: stock price
-    :return: buy_in amount
+    ### 计算买入数量
+    #### :param funds: 可用资金
+    #### :param price: 股票价格
+    #### :return: 买入数量
     """
     amount = int(funds*(1-COST_FEE) / price)
     amount = amount // 100 * 100
@@ -194,9 +188,9 @@ def calculate_buy_in_amount(funds, price) -> int | None:
 
 def create_daily_profit_list():
     """
-    create and update daily profit list
-    NOTE: 
-    contains columns: trade_date, profit, delta
+    ### 创建和更新每日收益列表
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### NOTE: 包含的列名: trade_date, profit, delta
     """
     if not is_trade_date_or_not():
         return
@@ -230,11 +224,12 @@ def create_daily_profit_list():
 
 def create_or_update_funds_change_list(funds: float, note: str) -> bool:
     """
-    create or refresh funds change list
-    :param funds: funds to add or reduce
-    :param note: note for funds change
-    :return: True if success, False if failed
-    NOTE: contains columns: datetime, amount, balance, note
+    ### 创建或更新资金变动列表
+    #### :param funds: 资金变动金额, 正数为增加, 负数为减少
+    #### :param note: 备注
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### :return: 成功返回True, 失败返回False(余额不足)
+    #### :包含的列名: datetime, amount, balance, note
     """
     if not os.path.exists(FUNDS_LIST):
         now = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S')
@@ -255,11 +250,11 @@ def create_or_update_funds_change_list(funds: float, note: str) -> bool:
 
 def create_holding_list(initial_cash: float = initial_funds):
     """
-    build holding list
-    :param initial_cash: initial cash
-    NOTE: contains columns:
-    ts_code, stock_name, industry, trade_date, date_in, date_out, days(trade days), holding_days(calender days), 
-    buy_point_base, target_rate, price_in, price_out, amount, rate_current, rate_yearly, status
+    ### 创建持仓列表
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    #### NOTE: 包含的列名:
+    #### ts_code, stock_name, industry, trade_date, date_in, date_out, days(trade days), holding_days(calender days), 
+    #### buy_point_base, target_rate, price_in, price_out, amount, rate_current, rate_yearly, status
     """
     columns = [
         'ts_code', 'stock_name', 'industry', 'trade_date', 'date_in', 'date_out', 'days', 'holding_days','buy_point_base', 
@@ -273,6 +268,10 @@ def create_holding_list(initial_cash: float = initial_funds):
 
 # 持续扫描buy_in_list.csv, 买入股票
 def scan_buy_in_list():
+    """
+    ### 扫描买入列表, 买入股票
+    #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
+    """
     if not os.path.exists(BUY_IN_LIST):
         return
     if not os.path.exists(HOLDING_LIST):
@@ -294,6 +293,9 @@ def scan_buy_in_list():
     buy_in_df = buy_in_df.reset_index(drop=True)
 
     def get_max_price_between_today_and_trade_date(idx_row):
+        """
+        ### 获取从trade_date到今天的最高价
+        """
         i, row = idx_row
         code = row['ts_code']
         trade_date = row['trade_date']
@@ -312,6 +314,21 @@ def scan_buy_in_list():
         return price_max
 
     def scan_buy_in_list_row(idx_row):
+        """
+        ### 扫描买入列表单行信息
+        #### :param idx_row: index, row
+        #### 买入逻辑
+        - 未获取到实时价格，跳过
+        - 价格高于买入基准点buy_point_base的 1.05倍, 跳过
+        - 价格低于最低股票价格，跳过
+        - 停牌股票，跳过
+        - 跌停板附近，跳过
+        - 等待天数不足(下跌趋势触底天数不足)，跳过
+        - 避免买入后持有天数过短, 剩余交易天数不足, 跳过
+        - 买入前最高价达到预期收益率目标的WAITING_RATE_PCT倍数的, 跳过
+        - 价格持续下降，跳过
+        - 当前持仓股票数达到上限，跳过
+        """
         i, row = idx_row
         code = row['ts_code']
         name = row['stock_name']
@@ -323,7 +340,7 @@ def scan_buy_in_list():
         print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
         if price_now is None or price_now <= 0:
             return
-        if price_now >= buy_point_base:
+        if price_now >= buy_point_base * 1.05:  # if price_now >= buy_point_base * 1.05, dont buy in
             return
         if price_now <= MIN_STOCK_PRICE:
             return
@@ -355,7 +372,7 @@ def scan_buy_in_list():
             return
         # 优化：实时获取持仓数量，避免多线程下全局变量不同步
         with lock:
-            current_holding_stocks = _get_holding_stocks_number()
+            current_holding_stocks = get_holding_stocks_number()
             if current_holding_stocks >= MAX_STOCKS:
                 return
             buy_in(code, price_now, amount, trade_date, buy_point_base, target_rate)
@@ -378,7 +395,8 @@ def scan_buy_in_list():
 # 持续刷新holding_list.csv
 def refresh_holding_list():
     """ 
-    refresh columns: days, holding_days, price_now, profit, rate_current, rate_yearly
+    ### 刷新持仓列表
+    #### 刷新的列名: days, holding_days, price_now, profit, rate_current, rate_yearly
     """
     if not os.path.exists(HOLDING_LIST):
         create_holding_list()
@@ -392,8 +410,8 @@ def refresh_holding_list():
 
     def refresh_holding_list_row(idx_row):
         """
-        refresh holding list single row infomation
-        :param idx_row: index, row
+        ### 刷新持仓列表单行信息
+        #### :param idx_row: index, row
         """
         i, row = idx_row
         trade_date = row['trade_date']
@@ -467,7 +485,7 @@ def refresh_holding_list():
 # 持续扫描holding_list.csv, 卖出股票
 def scan_holding_list():
     """
-    scan holding list, sell out stocks
+    ### 扫描持仓列表，卖出股票
     """
     if not os.path.exists(HOLDING_LIST):
         create_holding_list()
@@ -478,6 +496,21 @@ def scan_holding_list():
         holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
     
     def scan_holding_list_row(idx_row):
+        """
+        ### 扫描持仓列表单行信息
+        #### :param idx_row: index, row
+        #### 卖出逻辑
+        - 已经卖出的股票，跳过
+        - 持有天数为1天(当天买入), 跳过
+        - 未获取到实时价格，跳过
+        - 停牌股票，跳过
+        - 涨停板附近，跳过
+        - 上涨过程中，跳过
+        - 持有天数超过最大交易天数，卖出
+        - 当前跌幅超过最大跌幅限制，卖出
+        - 达到目标收益率，卖出
+        - 提前卖出标准触发，卖出
+        """
         i, row = idx_row
         if row['date_out'] != '':
             return
@@ -549,92 +582,14 @@ def scan_holding_list():
                     future.result()
                 except Exception as e:
                     print(f'({MODEL_NAME}) scan_holding_list_row error: {e}')
-
-def clear_buy_in_list(tolerance: float = 0.95) -> pd.DataFrame | None:
-    """
-    清理买入清单中实际下跌幅度未达到数据集 filter 筛选值的数据集
-    造成这种现象的原因是股票日行情数据未对价格每日前复权(尽管下载当日是最新的前复权数据),
-    但是在下一次分红派息送股之后,oversold 系统未对前面的数据进行前复权处理, 所以在计算下
-    跌幅度时,会发生夸大下跌幅度的现象,导致实际下跌幅度不够的下跌趋势被错误地计入了数据集。
-    :param tolerance: 容许的误差范围, 默认为 0.95, 即 5% 的误差
-    :return: 返回删除记录的 DataFrame, 包含 ts_code, stock_name, max_date_forward, 
-    trade_date, max_down_rate, max_down_rate_origin, src
-    NOTE:
-    处理方法如下: 获取 BUY_IN_LIST 中的 max_date_forward, 取当日的最高价, 将其和
-    buy_point_base前复权至 today,比较下跌幅度,如果小于 src 列中的 filter 筛选值(名称
-    中的最后一个数值),则保留该行数据,否则即删除该行数据
-    TODO:
-    在创建 oversold 数据集的时候,已经对价格进行了前复权处理,应该说不需要再打这个补丁了,不知道
-    为什么还是会出现这个问题?
-    NOTE:
-    检查发现在创建数据集的时候, 前复权代码作用域错误, 致使在新建 oversold 数据集时没有前复权。
-    """
-    if not os.path.exists(BUY_IN_LIST):
-        return
-    with lock:
-        buy_in_df = pd.read_csv(BUY_IN_LIST, dtype={'trade_date': str, 'max_date_forward': str})
-        buy_in_df['max_date_forward'] = buy_in_df['max_date_forward'].apply(lambda x: str(x)[:8])
-    to_drop_index = []
-    result = []
-    
-    def clear_buy_in_list_row(idx_row):
-        i, row = idx_row
-        ts_code = row['ts_code']
-        stock_name = row['stock_name']
-        trade_date = row['trade_date']
-        max_date_forward = row['max_date_forward']
-        max_down_rate_origin = row['max_down_rate']
-        buy_point_base = row['buy_point_base']
-        src = row['src']
-        filter_value = -float(src.split('.')[1]) / 100  # filter value from src
-        daily_csv = f'{BASICDATA_DIR}/dailydata/{ts_code}.csv'
-        daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
-        high_price_df = daily_df[daily_df['trade_date'] == max_date_forward]['high'].values
-        if high_price_df.size == 0:
-            return
-        high_price = high_price_df[0]
-        xd_high_price = get_qfq_price_by_adj_factor(
-            code=ts_code, pre_price=high_price, start=max_date_forward
-        )
-        if xd_high_price == high_price:
-            return
-        xd_point_base = get_qfq_price_by_adj_factor(
-            code=ts_code, pre_price=buy_point_base, start=trade_date
-        )
-        max_down_rate = (xd_point_base - xd_high_price) / xd_high_price
-        if abs(max_down_rate) / abs(filter_value) <= tolerance:
-            to_drop_index.append(i)
-            tmp = (ts_code, stock_name, max_date_forward, trade_date, max_down_rate, max_down_rate_origin, src)
-            result.append(tmp)
-    
-    idx_rows = list(buy_in_df.iterrows())
-    step = 8
-    for start in range(0, len(idx_rows), step):
-        end = start + step if start + step < len(idx_rows) else len(idx_rows)
-        idx_rows_batch = idx_rows[start:end]
-        with ThreadPoolExecutor() as executor:
-            executor.map(clear_buy_in_list_row, idx_rows_batch)
-    buy_in_df = buy_in_df.drop(index=to_drop_index)
-    buy_in_df = buy_in_df.reset_index(drop=True)
-    with lock:
-        buy_in_df.to_csv(BUY_IN_LIST, index=False)
-    if result:
-        result = set(result)  # 去重
-        columns = ['ts_code', 'stock_name', 'max_date_forward', 'trade_date', 'max_down_rate', 'max_down_rate_origin', 'src']
-        result_df = pd.DataFrame(result, columns=columns)
-        result_df = result_df.sort_values(by=['ts_code', 'trade_date'], ascending=[True, True])
-        result_df = result_df.reset_index(drop=True)
-        return result_df
-    else:
-        return
     
 def XD_buy_in_list_bak():
     """
-    盘中前复权 buy_point_base
-    NOTE:
-    save the result to XD_RECORD_BUY_IN_CSV(only one row),
-    XD_RECORD_BUY_IN_CSV contains columns: today, xd_or_not
-    NOTE: 已弃用
+    ### 盘中前复权 buy_point_base
+    #### NOTE:
+    #### 保存结果到 XD_RECORD_BUY_IN_CSV(只有一行),
+    #### XD_RECORD_BUY_IN_CSV 包含列名: today, xd_or_not
+    #### NOTE: 已弃用
     """
     if not os.path.exists(BUY_IN_LIST):
         return
@@ -685,7 +640,7 @@ def XD_buy_in_list_bak():
 
 def XD_buy_in_list():
     """
-    通过BUY_IN_LIST_ORIGIN盘中前复权 buy_point_base
+    ### 通过BUY_IN_LIST_ORIGIN盘中前复权 buy_point_base
     """
     if not os.path.exists(BUY_IN_LIST):
         return
@@ -725,12 +680,12 @@ def XD_buy_in_list():
 
 def XD_holding_list_bak():
     """
-    盘中前复权 buy_point_base 和 price_in, 对 amount 进行股数调整
-    前复权和股数调整记录在 XD_RECORD_CSV 中
-    NOTE:
-    XD_RECORD_CSV contains columns: ts_code, trade_date, xd_date, buy_point_base, 
-    price_in, amount, xd_buy_point_base, xd_price_in, xd_amount  
-    NOTE: 已弃用
+    ### 盘中前复权 buy_point_base 和 price_in, 对 amount 进行股数调整
+    #### 前复权和股数调整记录在 XD_RECORD_CSV 中
+    #### NOTE:
+    #### XD_RECORD_CSV contains columns: ts_code, trade_date, xd_date, buy_point_base, 
+    #### price_in, amount, xd_buy_point_base, xd_price_in, xd_amount  
+    #### NOTE: 已弃用
     """
     if not os.path.exists(HOLDING_LIST):
         return
@@ -819,8 +774,8 @@ def XD_holding_list_bak():
 
 def XD_holding_list():
     """
-    盘中前复权HOLDING_LIST中 buy_point_base 和 price_in, 对 amount 进行股数调整
-    从买入的原始记录 HOLDING_LIST_ORIGIN 中获取数据结合复权因子进行复权
+    ### 盘中前复权HOLDING_LIST中 buy_point_base 和 price_in, 对 amount 进行股数调整
+    ### 从买入的原始记录 HOLDING_LIST_ORIGIN 中获取数据结合复权因子进行复权
     """
     if not os.path.exists(HOLDING_LIST):
         return
@@ -874,10 +829,10 @@ def XD_holding_list():
 
 def trade_process(mode: Literal['trade', 'test'] = 'trade'):
     """
-    trade logic process
-    :param mode: trade or test, default is trade
-    :return: None
-    NOTE: 
+    ### 交易流程
+    #### :param mode: trade or test, default is trade
+    #### :return: None
+    #### NOTE: 
     - 'trade' 模式下, 在实际交易时间内执行交易逻辑。
     - 'test' 模式下, 在非交易时间执行交易逻辑, 主要为了检测交易逻辑是否正确。
     """

@@ -13,7 +13,7 @@ LIST_DF = None
 
 def get_stock_list():
     """
-    get stock list and save to the basicdata dir
+    ### 获取股票清单并保存到 basicdata/common 目录下
     """
     stocklist_df = pro.stock_basic(exchange='', list_status='L')
     stocklist_df.to_csv(STOCK_LIST_CSV, index=False)
@@ -22,8 +22,8 @@ get_stock_list()
 
 def get_trade_cal():
     """
-    get trade calendar and save to the basicdata dir
-    NOTE: coverage 90 days from today
+    ### 获取交易日历并保存到 basicdata/common 目录下
+    #### NOTE: 只获取最近90天的交易日历
     """
     today = datetime.date.today()
     start_date = (today - datetime.timedelta(days=90)).strftime('%Y%m%d')
@@ -35,10 +35,10 @@ def get_trade_cal():
 
 get_trade_cal()  # build trade calendar
 
-def load_list_df():
-    """ 
-    load the latest stock list DataFrame from STOCK_LIST_XLS
-    and filter out the suffix for Shanghai and Shenzhen stocks.
+def load_list_df() -> int:
+    """
+    ### 加载沪深.sz和.sh后缀股市股票列表 DataFrame
+    #### :return: 总股票数
     """
     global LIST_DF
     suffix = ['.sz', '.sh', '.SZ', '.SH']
@@ -51,9 +51,9 @@ load_list_df()
 
 def get_name_and_industry_by_code(ts_code: str) -> list | None:
     """
-    get stock name by ts_code in the LIST_DF
-    :params ts_code: 600036.SH or 600036
-    :return: stock name or None(if not found)
+    ### 查询股票名称和所属行业
+    #### :params ts_code: 股票代码, 格式为600036.SH 或 600036
+    #### :return: 股票名称和行业 或  None(未查询到股票)
     """
     if len(ts_code) == 6:
         ts_code = ts_code + '.SH' if ts_code[0] == '6' else ts_code + '.SZ'
@@ -63,15 +63,15 @@ def get_name_and_industry_by_code(ts_code: str) -> list | None:
 
 def get_all_stocks_info() -> list:
     """
-    get all stock codes and names in the LIST_DF
-    :return: list of stock code、name、industry and cnspell
+    ### 获取所有股票信息
+    #### :return: 股票 code、name、industry 和 cnspell 列表
     """
     return LIST_DF[['ts_code', 'name', 'industry', 'cnspell']].values.tolist()
 
 def get_all_stock_industry() -> list:
     """
-    get all stock industry in the LIST_DF
-    :return: list of stock industry
+    ### 获取所有股票行业
+    #### :return: 行业列表
     """
     res =  LIST_DF['industry'].unique().tolist()
     res = [item for item in res if isinstance(item, str)]
@@ -79,7 +79,7 @@ def get_all_stock_industry() -> list:
 
 def get_up_down_limit_list():
     """
-    get today up down limit list and save to the basicdata dir
+    ### 获取今日涨跌停股票列表并保存到 basicdata/common 目录下
     """
     today = datetime.date.today().strftime('%Y%m%d')
     up_down_limit_df = pro.stk_limit(trade_date=today)
@@ -88,7 +88,7 @@ def get_up_down_limit_list():
 
 def get_suspend_stock_list():
     """
-    get today suspend stock list and save to the basicdata dir
+    ### 获取今日停牌股票列表并保存到 basicdata/common 目录下
     """
     today = datetime.date.today().strftime('%Y%m%d')
     suspend_df = pro.suspend_d(suspend_type='S', trade_date=today)
