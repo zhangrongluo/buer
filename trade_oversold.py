@@ -9,13 +9,13 @@ from stocklist import get_name_and_industry_by_code
 from concurrent.futures import ThreadPoolExecutor
 from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, 
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
-                           REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST,
+                           REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST, MAX_BUY_UP_RATE,
                             DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV,
                             HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN)
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, TEST_DIR
 from cons_hidden import bark_device_key
-from utils import (send_wechat_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
-                   get_up_down_limit, early_sell_standard_oversold, is_rising_or_not, is_decreasing_or_not, 
+from utils import (send_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
+                   get_up_down_limit, early_sell_standard_oversold_v2, is_rising_or_not, is_decreasing_or_not, 
                    is_suspended_or_not, get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data)
 
 backup_dir = f'{BACKUP_DIR}/oversold'
@@ -107,7 +107,7 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, buy_point_base
     os.system(f'afplay /System/Library/Sounds/Ping.aiff')  # play sound third times
     title = '买入股票::OverSold'
     message = f'{stock_name}-{code}-买入价:{price}元-买入数量:{amount}股-{now}'
-    send_wechat_message_via_bark(bark_device_key, title, message)
+    send_message_via_bark(bark_device_key, title, message)
 
 def sell_out(code: str, price: float, trade_date: str) -> None:
     """
@@ -173,7 +173,7 @@ def sell_out(code: str, price: float, trade_date: str) -> None:
     os.system(f'afplay /System/Library/Sounds/Hero.aiff')  # play sound third times
     title = '卖出股票::OverSold'
     message = f'{stock_name}-{code}-卖出价:{price}元-卖出数量:{amount}股-{now}'
-    send_wechat_message_via_bark(bark_device_key, title, message)
+    send_message_via_bark(bark_device_key, title, message)
 
 def calculate_buy_in_amount(funds, price) -> int | None:
     """
@@ -319,7 +319,7 @@ def scan_buy_in_list():
         #### :param idx_row: index, row
         #### 买入逻辑
         - 未获取到实时价格，跳过
-        - 价格高于买入基准点buy_point_base的 1.05倍, 跳过
+        - 价格高于买入基准点buy_point_base的限定幅度MAX_BUY_UP_RATE, 跳过
         - 价格低于最低股票价格，跳过
         - 停牌股票，跳过
         - 跌停板附近，跳过
@@ -340,7 +340,7 @@ def scan_buy_in_list():
         print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
         if price_now is None or price_now <= 0:
             return
-        if price_now >= buy_point_base * 1.05:  # if price_now >= buy_point_base * 1.05, dont buy in
+        if price_now >= buy_point_base * (1 + MAX_BUY_UP_RATE): 
             return
         if price_now <= MIN_STOCK_PRICE:
             return
@@ -561,7 +561,9 @@ def scan_holding_list():
             return
         # sell out early or not
         rate_yearly = row['rate_yearly']
-        early_or_not = early_sell_standard_oversold(holding_days, rate_current, rate_yearly)
+        early_or_not = early_sell_standard_oversold_v2(
+            holding_days=holding_days, target_rate=target_rate, rate_current=rate_current
+        )
         if early_or_not:
             with lock:
                 sell_out(row['ts_code'], price_now, row['trade_date'])

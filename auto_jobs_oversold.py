@@ -9,7 +9,7 @@ import pandas as pd  # type: ignore
 from tensorflow import keras  
 from concurrent.futures import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
-from utils import calculate_today_series_statistic_indicator, check_pre_trade_data_update_status, send_wechat_message_via_bark, check_daily_temp_data_update_status
+from utils import calculate_today_series_statistic_indicator, check_pre_trade_data_update_status, send_message_via_bark, check_daily_temp_data_update_status
 from stocklist import get_all_stocks_info, get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
 from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indicator, update_all_daily_simple_quant_factor, update_all_adj_factor_data,
                                     download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, 
@@ -495,12 +495,12 @@ def XD_stock_list_task():
 @is_trade_day(task='检查盘前数据更新状态')
 def check_pre_trade_data_update_status_task():
     status = check_pre_trade_data_update_status()
-    send_wechat_message_via_bark(device_key=bark_device_key, message=status, title='检查盘前数据更新状态')
+    send_message_via_bark(device_key=bark_device_key, message=status, title='检查盘前数据更新状态')
 
 @is_trade_day(task='检查盘后数据更新状态')
 def check_daily_temp_data_update_status_task():
     status = check_daily_temp_data_update_status()
-    send_wechat_message_via_bark(device_key=bark_device_key, message=status, title='检查盘后数据更新状态')
+    send_message_via_bark(device_key=bark_device_key, message=status, title='检查盘后数据更新状态')
 
 @is_trade_day(task='计算今日统计指标')
 def calculate_today_statistics_indicators():

@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR, TEST_DIR, TRADE_CAL_CSV
 from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
-from utils import (send_wechat_message_via_bark, get_stock_realtime_price, get_all_prices_async, is_trade_date_or_not,
+from utils import (send_message_via_bark, get_stock_realtime_price, get_all_prices_async, is_trade_date_or_not,
                    get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not,
                    get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, early_sell_standard_downgap)
 from stocklist import get_name_and_industry_by_code
@@ -140,7 +140,7 @@ def buy_in(code: str, price: float, amount: int, trade_date: str, target_price: 
     os.system(f'afplay /System/Library/Sounds/Ping.aiff')  # play sound third times
     title = f'买入股票::{MODEL_NAME}'
     message = f'{stock_name}-{code}-买入价:{price}元-买入数量:{amount}股-{now}'
-    send_wechat_message_via_bark(bark_device_key, title, message)
+    send_message_via_bark(bark_device_key, title, message)
 
 def sell_out(code: str, price: float, trade_date: str, max_trade_days) -> None:
     """
@@ -212,7 +212,7 @@ def sell_out(code: str, price: float, trade_date: str, max_trade_days) -> None:
     os.system(f'afplay /System/Library/Sounds/Hero.aiff')  # play sound third times
     title = f'卖出股票::{MODEL_NAME}'
     message = f'{stock_name}-{code}-卖出价:{price}元-卖出数量:{amount}股-{now}'
-    send_wechat_message_via_bark(bark_device_key, title, message)
+    send_message_via_bark(bark_device_key, title, message)
 
 def calculate_buy_in_amount(funds, price) -> int | None:
     """
@@ -667,6 +667,7 @@ def scan_holding_list(max_trade_days: int):
             HOLDING_LIST = dataset_group_cons[group].get('HOLDING_LIST')
             MAX_TRADE_DAYS = dataset_group_cons[group].get('MAX_TRADE_DAYS')
             EXTRA_TRADE_DAYS = dataset_group_cons[group].get('EXTRA_TRADE_DAYS')
+            EXTRA_DAYS_RATE = dataset_group_cons[group].get('EXTRA_DAYS_RATE')
             MODEL_NAME = dataset_group_cons[group].get('MODEL_NAME')
             TRADE_LOG = dataset_group_cons[group].get('TRADE_LOG')
             MAX_DOWN_LIMIT = dataset_group_cons[group].get('MAX_DOWN_LIMIT')
@@ -701,7 +702,7 @@ def scan_holding_list(max_trade_days: int):
         - 如果缺口回补到目标价或者缺口已回补,卖出
         - 如果达到最大跌幅限制(止损点),卖出
         - 如果持有天数超过最大交易天数, 卖出
-        - 已经达到最大交易天数但亏损持仓不卖出, 延期等待
+        - 已经达到最大交易天数但亏损持仓或未达到盈利标准不卖出, 延期等待
         - 如果触发提前卖出标准,卖出
         """
         i, row = idx_row
@@ -751,7 +752,7 @@ def scan_holding_list(max_trade_days: int):
         if days >= MAX_TRADE_DAYS:
             # 到期亏损或者略微盈利，延期等待
             max_days = MAX_TRADE_DAYS + EXTRA_TRADE_DAYS
-            if days < max_days and rate_current <= 0.50 / 100:
+            if days < max_days and rate_current <= EXTRA_DAYS_RATE:
                 return
             with lock:
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
@@ -760,7 +761,7 @@ def scan_holding_list(max_trade_days: int):
             return
         # if early sell standard met, sell out
         rate_yearly = row['rate_yearly']
-        early_or_not =  early_sell_standard_downgap(holding_days, rate_current, rate_yearly)
+        early_or_not =  early_sell_standard_downgap(holding_days=holding_days, rate_current=rate_current)
         if early_or_not:
             with lock:
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)

@@ -17,7 +17,7 @@ from cons_downgap import dataset_group_cons
 
 
 # send wechat message
-def send_wechat_message_via_bark(device_key, title, message):
+def send_message_via_bark(device_key, title, message):
     """
     ### 通过Bark发送消息
     #### :param device_key: 系统生成的Bark设备Key
@@ -29,7 +29,7 @@ def send_wechat_message_via_bark(device_key, title, message):
     response = requests.get(url).json()
     return response
 
-def send_wechat_message_via_pushover(user_key, app_token, title, message):
+def send_message_via_pushover(user_key, app_token, title, message):
     """
     ### 通过Pushover发送消息
     #### :param user_key: pushover user key
@@ -517,21 +517,40 @@ def early_sell_standard_oversold(holding_days: int, rate_current: float, rate_ye
         return True
     else:
         return False
+    
+def early_sell_standard_oversold_v2(holding_days: int, target_rate: float, rate_current: float) -> bool:
+    """
+    ### oversold 提前卖出标准 v2 版本
+    #### :param holding_days: 持有天数
+    #### :param target_rate: 目标收益率, 由模型推理得出
+    #### :param rate_current: 当前收益率
+    #### :return: True if should sell, False otherwise
+    #### NOTE:
+    #### holding_days < 30 and rate_current >= 0.20
+    #### 90 > holding_days >= 30 and rate_current >= target_rate * 0.50
+    #### 150 > holding_days >= 90 and rate_current >= target_rate * 0.70
+    """
+    if holding_days < 30 and rate_current >= 0.20:
+        return True
+    elif 30 <= holding_days < 90 and rate_current >= target_rate * 0.50:
+        return True
+    elif 90 <= holding_days < 150 and rate_current >= target_rate * 0.70:
+        return True
+    else:
+        return False
 
-def early_sell_standard_downgap(holding_days: int, rate_current: float, rate_yearly: float) -> bool:
+def early_sell_standard_downgap(holding_days: int, rate_current: float) -> bool:
     """
     ### downgap 提前卖出标准
     #### :param holding_days: 持有天数
     #### :param rate_current: 当前收益率
-    #### :param rate_yearly: 年化收益率
     #### :return: True if should sell, False otherwise
-    #### NOTE:
-    #### rate_yearly 按照年 365 天计算
-    #### 3.04 = 365/((10+20)/2)*((0.10+0.15)/2)
     """
     if holding_days < 10 and rate_current >= 0.10:
         return True
-    elif 10 <= holding_days < 20 and rate_yearly >= 3.04:
+    elif 10 <= holding_days < 20 and rate_current >= 0.15:
+        return True
+    elif 20 <= holding_days < 30 and rate_current >= 0.18:
         return True
     else:
         return False
