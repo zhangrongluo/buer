@@ -11,7 +11,7 @@ import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
 from basic_data_alt_edition import download_dividend_data_in_multi_ways
-from cons_general import TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, TEMP_DIR, DAILY_ADJFACTOR_TEMP_CSV
+from cons_general import TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, TEMP_DIR, DAILY_ADJFACTOR_TEMP_CSV, DATASETS_DIR
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
 
@@ -1259,6 +1259,40 @@ def get_gaps_agg_days_information_groupby_rate(
     grouped.columns = new_columns
     grouped = grouped.reset_index()
     return grouped
+
+def calculate_days_from_tradedate_to_filldate(code: str, trade_date: str) -> tuple[int, str | None] | None:
+    """
+    ### 计算缺口trade_date 到回补日之间的天数, 如未回补, 则计算 trade_date 至最后一个交易日之间的天数
+    #### : param code: 股票代码, 格式为 '000001.SZ' 或则 '600000'
+    #### : param trade_date: 交易日期,'YYYYMMDD' 格式, 标定缺口产生的日期
+    #### : return: 天数(不含trade_date当天)和回补日期 or None(如果trade_date 指定的缺口不存在)
+    #### NOTE:
+    #### 先在缺口数据集中查找, 如果已经回补则返回回补天数和回补日期, 如果未回补, 则从交易数据中计算至最后
+    #### 一个交易日的天数, 返回该天数和 None, 如果缺口数据集中不存在该缺口, 则返回 None
+    #### 天数为交易天数, 不是自然天数
+    """
+    if len(code) == 6:
+        code = f'{code}.SH' if code.startswith('6') else f'{code}.SZ'
+    gap_csv = f'{DATASETS_DIR}/downgap/{code}.csv'
+    if not os.path.exists(gap_csv):
+        return None
+    gap_df = pd.read_csv(gap_csv, dtype={'trade_date': str, 'fill_date': str})
+    gap_df = gap_df[gap_df['trade_date'] == trade_date]
+    if gap_df.empty:
+        return None
+    days = gap_df.iloc[0]['days']
+    fill_date = gap_df.iloc[0]['fill_date']
+    if pd.notna(days):
+        return int(days), fill_date
+    dailyd_csv = f'{BASICDATA_DIR}/dailydata/{code}.csv'
+    if not os.path.exists(dailyd_csv):
+        return None
+    daily_df = pd.read_csv(dailyd_csv, dtype={'trade_date': str})
+    daily_df = daily_df[daily_df['trade_date'] >= trade_date]
+    if daily_df.empty:
+        return None
+    days = len(daily_df) - 1 # 不含trade_date当天
+    return int(days), None
 
 ### 和指数相关统计函数
 def calculate_correlation_between_portfolio_and_index(

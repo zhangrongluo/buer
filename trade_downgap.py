@@ -9,8 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR, TEST_DIR, TRADE_CAL_CSV
 from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
-from utils import (send_message_via_bark, get_stock_realtime_price, get_all_prices_async, is_trade_date_or_not,
-                   get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not,
+from utils import (send_message_via_bark, get_stock_realtime_price, calculate_days_from_tradedate_to_filldate, 
+                   is_trade_date_or_not, get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not,
                    get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, early_sell_standard_downgap)
 from stocklist import get_name_and_industry_by_code
 
@@ -546,14 +546,7 @@ def refresh_holding_list(max_trade_days: int):
         holding_df = pd.read_csv(
             HOLDING_LIST, dtype={'trade_date': str, 'fill_date': str, 'date_in': str}
         )
-        holding_df['fill_date'] = holding_df['fill_date'].apply(lambda x: str(x)[:8])
-        holding_df['fill_date'] = holding_df['fill_date'].apply(lambda x: x if x != 'nan' else '')
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
-        # # 异步获取全部股票的实时价格备用
-        # ts_codes = holding_df['ts_code'].tolist()
-        # prices_dict = asyncio.run(get_all_prices_async(ts_codes))
-
+    
     def refresh_holding_list_row(idx_row):
         """
         ### 刷新持仓列表单行信息
@@ -561,61 +554,39 @@ def refresh_holding_list(max_trade_days: int):
         """
         i, row = idx_row
         try:
-            gap_csv = f'{gap_root}/{row["ts_code"]}.csv'
-            if not os.path.exists(gap_csv):
-                print(f"Warning: {gap_csv} not found, skip row {row['ts_code']}")
+            fill_date = row['fill_date']
+            status = row['status']
+            if pd.notna(fill_date) and status == 'sold_out':
                 return i, row
-            gap_df = pd.read_csv(gap_csv, dtype={'trade_date': str, 'fill_date': str})
-            gap_df['fill_date'] = gap_df['fill_date'].apply(lambda x: str(x)[:8])
-            gap_df['fill_date'] = gap_df['fill_date'].apply(lambda x: x if x != 'nan' else '')
-            gap_df = gap_df.sort_values(by='trade_date', ascending=True)
+            ts_code = row['ts_code']
+            stock_name = row['stock_name']
             trade_date = row['trade_date']
-            if trade_date not in gap_df['trade_date'].values:
-                print(f"Warning: trade_date {trade_date} not in {gap_csv}, skip row {row['ts_code']}")
+            date_in = row['date_in']
+            days_date = calculate_days_from_tradedate_to_filldate(ts_code, trade_date)
+            if days_date is None:
                 return i, row
-            fill_date = gap_df[gap_df['trade_date'] == trade_date]['fill_date'].values[0]
-            if fill_date != '':
-                days = gap_df[gap_df['trade_date'] == trade_date]['days'].values[0]
-                row['fill_date'] = fill_date
+            days, fill_date = days_date
+            if status == 'sold_out':
                 row['days'] = days
-            # if status is sold_out, update fill_date and days
-            if row['status'] == 'sold_out':
+                if fill_date is not None:
+                    row['fill_date'] = fill_date
                 return i, row
             # if status is holding, update holding_days, days, price_now, profit, rate_current, rate_yearly
-            if row['status'] == 'holding':
+            if status == 'holding':
                 # holding_days(自然日历间隔天数)
                 try:
-                    date_in = datetime.datetime.strptime(str(row['date_in']), '%Y%m%d')
+                    date_in = datetime.datetime.strptime(str(date_in), '%Y%m%d')
                 except Exception as e:
-                    print(f"Warning: date_in parse error for {row['ts_code']}: {row['date_in']}, {e}")
+                    print(f"Warning: date_in parse error for {ts_code}: {date_in}, {e}")
                     return i, row
                 today = datetime.datetime.now()
                 holding_days = (today - date_in).days + 1
                 row['holding_days'] = holding_days
                 # days(交易日历间隔天数today - trade_date)
-                daily_csv = f'{daily_root}/{row["ts_code"]}.csv'
-                if not os.path.exists(daily_csv):
-                    print(f"Warning: {daily_csv} not found, skip row {row['ts_code']}")
-                    return i, row
-                daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
-                daily_df = daily_df.sort_values(by='trade_date', ascending=True)
-                trade_date_list = daily_df['trade_date'].tolist()
-                today_str = today.strftime('%Y%m%d')
-                if trade_date not in trade_date_list:
-                    print(f"Warning: trade_date {trade_date} not in {daily_csv}, skip row {row['ts_code']}")
-                    return i, row
-                trade_date_index = trade_date_list.index(trade_date)
-                if today_str in trade_date_list:
-                    today_index = trade_date_list.index(today_str)
-                    days = abs(today_index - trade_date_index) 
-                else:
-                    today_index = len(trade_date_list) - 1
-                    days = abs(today_index - trade_date_index) + 1  # today还未收盘，未在daily_df中，所以+1
                 row['days'] = days
                 # price_now, profit, rate_current, rate_yearly
-                # price_now = prices_dict.get(row['ts_code'])
-                price_now = get_stock_realtime_price(row['ts_code'])
-                print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
+                price_now = get_stock_realtime_price(ts_code)
+                print(f'({MODEL_NAME}) {ts_code} {stock_name} price_now: {price_now}')
                 if price_now is None:
                     # 保持原有 price_now，不更新
                     return i, row
@@ -634,7 +605,7 @@ def refresh_holding_list(max_trade_days: int):
                 row['rate_yearly'] = rate_yearly
             return i, row
         except Exception as e:
-            print(f"Exception in refresh_holding_list_row for {row['ts_code']}: {e}")
+            print(f"Exception in refresh_holding_list_row for {ts_code} {stock_name}: {e}")
             return i, row
 
     # 多线程刷新holding_list.csv，收集结果，主线程写回
@@ -680,13 +651,6 @@ def scan_holding_list(max_trade_days: int):
         holding_df = pd.read_csv(
             HOLDING_LIST, dtype={'trade_date': str, 'fill_date': str, 'date_out': str}
         )
-        holding_df['fill_date'] = holding_df['fill_date'].apply(lambda x: str(x)[:8])
-        holding_df['fill_date'] = holding_df['fill_date'].apply(lambda x: x if x != 'nan' else '')
-        holding_df['date_out'] = holding_df['date_out'].apply(lambda x: str(x)[:8])
-        holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
-        # # 异步获取全部股票的实时价格备用
-        # ts_codes = holding_df['ts_code'].tolist()
-        # prices_dict = asyncio.run(get_all_prices_async(ts_codes))
     
     def scan_holding_list_row(idx_row):
         """
@@ -709,14 +673,11 @@ def scan_holding_list(max_trade_days: int):
         ts_code = row['ts_code']
         stock_name = row['stock_name']
         trade_date = row['trade_date']
-        if row['date_out'] != '':
-            return
         if row['status'] == 'sold_out':
             return
         holding_days = row['holding_days']
         if holding_days == 1:
             return
-        # price_now = prices_dict.get(ts_code)
         price_now = get_stock_realtime_price(ts_code)
         print(f'({MODEL_NAME}) {ts_code} {stock_name} price_now: {price_now}')
         if price_now is None:
@@ -733,7 +694,7 @@ def scan_holding_list(max_trade_days: int):
             return
         # if the down gap is filled, sell out
         fill_date = row['fill_date']
-        if price_now >= row['target_price'] or fill_date != '':
+        if price_now >= row['target_price'] or pd.notna(fill_date):
             with lock:
                 sell_out(ts_code, price_now, trade_date=trade_date, max_trade_days=max_trade_days)
             msg = f'卖出 {ts_code} {stock_name}: the down gap is filled'

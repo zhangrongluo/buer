@@ -402,11 +402,7 @@ def refresh_holding_list():
         create_holding_list()
         return
     with lock:
-        holding_df = pd.read_csv(
-            HOLDING_LIST, dtype={'trade_date': str, 'date_in': str}
-        )
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
+        holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str, 'date_in': str})
 
     def refresh_holding_list_row(idx_row):
         """
@@ -419,8 +415,7 @@ def refresh_holding_list():
         if row['status'] == 'sold_out':
             return
         # if status is holding, update holding_days, days, price_now, price_in, amount, profit
-        # rate_current, rate_yearly
-        # holding_days(自然日历间隔天数)
+        # rate_current, rate_yearly. holding_days(自然日历间隔天数)
         try:
             date_in = datetime.datetime.strptime(row['date_in'], '%Y%m%d')  # date format problem
             today = datetime.datetime.now()
@@ -433,7 +428,6 @@ def refresh_holding_list():
                 daily_df = daily_df.sort_values(by='trade_date', ascending=True)
                 trade_date_list = daily_df['trade_date'].tolist()
                 today_str = today.strftime('%Y%m%d')
-                trade_date_index = trade_date_list.index(trade_date)
                 if today_str in trade_date_list:
                     today_index = trade_date_list.index(today_str)
                 else:
@@ -491,9 +485,7 @@ def scan_holding_list():
         create_holding_list()
         return
     with lock:
-        holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str, 'date_out': str})
-        holding_df['date_out'] = holding_df['date_out'].apply(lambda x: str(x)[:8])
-        holding_df['date_out'] = holding_df['date_out'].apply(lambda x: x if x != 'nan' else '')
+        holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str})
     
     def scan_holding_list_row(idx_row):
         """
@@ -512,8 +504,6 @@ def scan_holding_list():
         - 提前卖出标准触发，卖出
         """
         i, row = idx_row
-        if row['date_out'] != '':
-            return
         if row['status'] == 'sold_out':
             return
         holding_days = row['holding_days']
