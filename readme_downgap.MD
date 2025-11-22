@@ -31,6 +31,7 @@
 - ONE_TIME_FUNDS：单次买入投入的资金额度。
 - MIN_STOCK_PRICE：买入股票的最低价格，低于此价格的股票，系统不会买入。
 - SHUFFLE：决定训练时是否打乱数据集。
+- STOP_BUYING：是否停止买入新股票, True表示停止买入新股票, 默认False。
 - PRED_MODELS：用于预测交易集预期收益率的模型数。
 - initial_funds：初始投入资金。
 - additional_rate：当第一跌停缺口出现后，通过预期收益率推断会继续出现跌停或者大跌，从而可能出现第二个大缺口时，提高第一个缺口的收益率水平，阻止交易。

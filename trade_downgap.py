@@ -1,12 +1,13 @@
 import os
 import re
 import pandas as pd
+import shutil
 import datetime
 import logging
 from typing import Literal
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
-from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR, TEST_DIR, TRADE_CAL_CSV
+from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR, TEST_DIR, TRADE_CAL_CSV, PREDICT_DIR
 from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
 from utils import (send_message_via_bark, get_stock_realtime_price, calculate_days_from_tradedate_to_filldate, 
@@ -18,6 +19,11 @@ daily_root = f'{BASICDATA_DIR}/dailydata'
 os.makedirs(daily_root, exist_ok=True)
 gap_root = f'{DATASETS_DIR}/downgap'
 os.makedirs(gap_root, exist_ok=True)
+predict_root = f'{PREDICT_DIR}/downgap'
+os.makedirs(predict_root, exist_ok=True)
+trade_root = f'{TRADE_DIR}/downgap'
+os.makedirs(trade_root, exist_ok=True)
+
 lock = Lock()
 
 # 日志对象缓存，避免重复添加handler
@@ -340,6 +346,7 @@ def scan_buy_in_list(max_trade_days:int):
             PRED_RATE_PCT = dataset_group_cons[group].get('PRED_RATE_PCT')
             MAX_STOCKS = dataset_group_cons[group].get('MAX_STOCKS')
             MODEL_NAME = dataset_group_cons[group].get('MODEL_NAME')
+            STOP_BUYING = dataset_group_cons[group].get('STOP_BUYING', False)
             break
     if not os.path.exists(BUY_IN_LIST):
         return
@@ -438,6 +445,7 @@ def scan_buy_in_list(max_trade_days:int):
         ### 扫描买入列表的一行, 买入股票
         #### :param idx_row: 行索引和行数据
         #### 买入逻辑:
+        - 停止买入STOP_BUYING参数设置为True时不买入
         - 未获取到实时价格不买入
         - 价格低于最低股票价格不买入
         - 停牌不买入
@@ -458,6 +466,8 @@ def scan_buy_in_list(max_trade_days:int):
         # price_now = prices_dict.get(code)
         price_now = get_stock_realtime_price(code)
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
+        if STOP_BUYING is True:
+            return
         if price_now is None:
             return
         if price_now <= MIN_STOCK_PRICE:
@@ -975,8 +985,8 @@ def XD_holding_list(max_trade_days: int):
         return
     with lock:
         holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str, 'date_in': str})
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
+        # holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
+        # holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
     origin_holding_df = pd.read_csv(HOLDING_LIST_ORIGIN, dtype={'trade_date': str, 'date_in': str})
     today = datetime.datetime.now().strftime('%Y%m%d')
     for idx_row in holding_df.iterrows():
@@ -1082,6 +1092,63 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
         shutil.copytree(f'{trade_dir}_test_copy', trade_dir, dirs_exist_ok=True)
         shutil.rmtree(f'{trade_dir}_test_copy')
 
+def build_buy_in_list():
+    """
+    ### 生成买入清单buy_in_list.csv
+    """
+    for group in dataset_group_cons:
+        MAX_TRADE_DAYS = dataset_group_cons[group].get('MAX_TRADE_DAYS')
+        MIN_PRED_RATE = dataset_group_cons[group].get('MIN_PRED_RATE')
+        PRED_RATE_PCT = dataset_group_cons[group].get('PRED_RATE_PCT')
+        BUY_IN_LIST_ORIGIN = dataset_group_cons[group].get('BUY_IN_LIST_ORIGIN')
+        exception_list = dataset_group_cons['common'].get('exception_list')
+        model_name_1 = dataset_group_cons[group].get('MODEL_NAME')
+        if MAX_TRADE_DAYS is None:
+            continue
+        # prepare data from trade_pred.csv within TRADE_COVERAGE_DAYS days
+        pred_path = f'{predict_root}/max_trade_days_{MAX_TRADE_DAYS}'
+        csv_name = f'{pred_path}/trade_pred_K.csv'
+        trade_df = pd.read_csv(csv_name, dtype={'trade_date': str, 'fill_data': str})
+        # add target_price column to trade_df, which is the row's pre_low
+        trade_df['target_price'] = None
+        for i, row in trade_df.iterrows():
+            ts_code = row['ts_code']
+            gap_csv = f'{gap_root}/{ts_code}.csv'
+            trade_date = row['trade_date']
+            gap_df = pd.read_csv(gap_csv, dtype={'trade_date': str})
+            gap_df = gap_df[gap_df['trade_date'] == trade_date]
+            if not gap_df.empty:
+                pre_low = gap_df['pre_low'].values[0]  # target_price
+                trade_df.loc[i, 'target_price'] = pre_low
+            # calculate days between trade_date and today
+            daily_csv = f'{daily_root}/{ts_code}.csv' 
+            daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
+            daily_df = daily_df.sort_values(by='trade_date', ascending=True)
+            today = datetime.datetime.now().strftime('%Y%m%d')
+            trade_dates = daily_df['trade_date'].tolist()
+            trade_date_index = trade_dates.index(trade_date)
+            if today not in trade_dates:
+                today_index = len(trade_dates) - 1
+                days = today_index - trade_date_index + 1  # 今日未收盘，未在daily_df中，所以+1
+            else:
+                today_index = trade_dates.index(today)
+                days = today_index - trade_date_index
+            trade_df.loc[i, 'days'] = days
+        # add diffrent rate columns to trade_df
+        trade_df['pred_100%'] = trade_df['pred'].map(lambda x: f'{x:.2%}')
+        col_pct = f'pred_{int(PRED_RATE_PCT * 100)}%'
+        trade_df[col_pct] = (trade_df['pred'] * PRED_RATE_PCT).map(lambda x: f'{x:.2%}')
+        # filter trade_df
+        trade_df = trade_df[trade_df['real'].isnull()]
+        trade_df = trade_df[trade_df['pred'] > MIN_PRED_RATE]
+        trade_df = trade_df[~trade_df['stock_name'].str.contains('|'.join(exception_list))]
+        trade_df = trade_df.reset_index(drop=True)
+        trade_dir = f'{trade_root}/max_trade_days_{MAX_TRADE_DAYS}'
+        os.makedirs(trade_dir, exist_ok=True)
+        csv_name = f'{trade_dir}/buy_in_list.csv'
+        trade_df.to_csv(csv_name, index=False)
+        shutil.copy(csv_name, BUY_IN_LIST_ORIGIN)   # BUY_IN_LIST_ORIGIN for xd
+        print(f'({model_name_1}) 买入清单生成完成, 共 {len(trade_df)} 条记录.')
 
 if __name__ == '__main__':
     import time

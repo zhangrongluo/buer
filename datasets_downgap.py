@@ -2,13 +2,14 @@
 calculate、refresh and merge Downgap datasets
 """
 import os
+import tqdm
 import pandas as pd
 import datetime
-import tushare as ts
+from concurrent.futures import ThreadPoolExecutor
 from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR
-from stocklist import get_name_and_industry_by_code
+from cons_downgap import dataset_group_cons
+from stocklist import get_name_and_industry_by_code, get_all_stocks_info
 from utils import get_qfq_price_DF_by_adj_factor
-
 
 daily_root = os.path.join(BASICDATA_DIR, 'dailydata')
 os.makedirs(daily_root, exist_ok=True)
@@ -300,3 +301,34 @@ def merge_all_gap_data(max_trade_days: int):
         five_columns = ['turnover_rate','mv_ratio', 'pe_ttm', 'pb', 'dv_ratio']
         df[five_columns] = df[five_columns].fillna(0) 
         df.to_csv(all_gaps_csv, index=False)
+
+def update_dataset():
+    """
+    ### 更新缺口数据
+    """
+    all_stocks = get_all_stocks_info()
+    codes = [stock[0] for stock in all_stocks]  # 沪深300全部股票代码
+    steps = 5
+    # 计算缺口数据
+    bar = tqdm.tqdm(total=len(codes), desc="更新缺口数据", ncols=100)
+    for code in range(0, len(codes), steps):
+        with ThreadPoolExecutor(max_workers=steps) as executor:
+            executor.map(get_gaps_statistic_data, codes[code:code+steps])
+        bar.update(steps)
+    bar.close()
+    # 刷新缺口数据
+    bar = tqdm.tqdm(total=len(codes), desc="刷新缺口数据", ncols=100)
+    for code in range(0, len(codes), steps):
+        with ThreadPoolExecutor(max_workers=steps) as executor:
+            executor.map(refresh_the_gap_csv, codes[code:code+steps])
+        bar.update(steps)
+    bar.close()
+    # 合并缺口数据
+    for group in dataset_group_cons:
+        max_trade_days = dataset_group_cons[group].get('MAX_TRADE_DAYS')
+        model_name = dataset_group_cons[group].get('MODEL_NAME')
+        if max_trade_days is None:
+            continue
+        print(f'({model_name}) 正在合并最大交易天数为{max_trade_days}天组的缺口数据集...')
+        merge_all_gap_data(max_trade_days)
+    print('缺口数据更新完成！')

@@ -1142,6 +1142,66 @@ def get_all_gaps_statistic_general_infomation() -> pd.DataFrame | None:
     result_df = pd.DataFrame([result])
     return result_df
 
+def get_sold_gaps_statistic_general_information(
+        max_trade_days: int, start: str | None = None, end: str | None = None
+) -> pd.DataFrame | None:
+    """
+    ### 获取指定类别下 downgap 投资组合中已回补缺口的统计信息
+    #### : param max_trade_days: 最大交易天数(指定投资组合)
+    #### : param start: 起始日期
+    #### : param end: 结束日期
+    #### : return: DataFrame with statistics or None if no data
+    #### NOTE:
+    #### 统计信息包括(竖式排列):
+    - start_date: 统计起始日期
+    - end_date: 统计结束日期
+    - max_trade_days: 最大交易天数
+    - total_gaps: 持仓列表中总的缺口数量
+    - sold_gaps: 已售出缺口数量
+    - filled_gaps: 已回补售出缺口数量
+    - days 的信息统计:
+        - min_days: 天数最小值
+        - max_days: 天数最大值
+        - mean_days: 天数均值
+        - median_days: 天数中位数
+        - quantile_25%: 天数25分位数
+        - quantile_50%: 天数50分位数
+        - quantile_75%: 天数75分位数
+        - quantile_90%: 天数90分位数
+    """
+    trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{int(max_trade_days)}'
+    holding_csv = f'{trade_root}/holding_list.csv'
+    if not os.path.exists(holding_csv):
+        return
+    holding_df = pd.read_csv(holding_csv, dtype={'date_in': str, 'date_out': str})
+    sold_gaps_df = holding_df[holding_df['status'] == 'sold_out']
+    if start is not None:
+        sold_gaps_df = sold_gaps_df[sold_gaps_df['date_out'] >= start]
+    if end is not None:
+        sold_gaps_df = sold_gaps_df[sold_gaps_df['date_out'] <= end]
+    if sold_gaps_df.empty:
+        return
+    filled_gaps_df = sold_gaps_df[sold_gaps_df['fill_date'].notna()]
+    if filled_gaps_df.empty:
+        return
+    result = {}
+    result['start_date'] = start if start is not None else sold_gaps_df['date_out'].min()[:8]
+    result['end_date'] = end if end is not None else sold_gaps_df['date_out'].max()[:8]
+    result['max_trade_days'] = int(max_trade_days)
+    result['total_gaps'] = len(holding_df)
+    result['sold_gaps'] = len(sold_gaps_df)
+    result['filled_gaps'] = len(filled_gaps_df)
+    result['min_days'] = filled_gaps_df['days'].min()
+    result['max_days'] = filled_gaps_df['days'].max()
+    result['mean_days'] = round(filled_gaps_df['days'].mean(), 2)
+    result['median_days'] = filled_gaps_df['days'].median()
+    result['quantile_25%'] = filled_gaps_df['days'].quantile(0.25)
+    result['quantile_50%'] = filled_gaps_df['days'].quantile(0.50)
+    result['quantile_75%'] = filled_gaps_df['days'].quantile(0.75)
+    result['quantile_90%'] = filled_gaps_df['days'].quantile(0.90)
+    result_df = pd.DataFrame([result]).T
+    return result_df
+
 def get_gaps_earning_to_days_probability(
         trade_days: int, gap: Literal['up', 'down'] = 'down',
         rate0: float = 0.06, step: float = 0.02, times: int = 3

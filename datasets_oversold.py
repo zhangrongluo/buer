@@ -2,10 +2,13 @@
 calculate、refresh and merge Oversold datasets
 """
 import os
+import tqdm
 import pandas as pd
 import datetime
-from stocklist import get_name_and_industry_by_code
-from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR
+from concurrent.futures import ThreadPoolExecutor
+from stocklist import get_name_and_industry_by_code, get_all_stocks_info
+from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR, TRADE_CAL_CSV
+from cons_oversold import dataset_to_update
 from utils import get_qfq_price_DF_by_adj_factor
 
 def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
@@ -317,3 +320,68 @@ def merge_all_oversold_dataset(forward_days, backward_days, down_filter):
     df_all.to_csv(all_oversold_csv, index=False)
     # NOTE: 此处保留了同一下跌过程的全部数据，但是在训练过程中同一个下跌过程保留最后一条数据。
     # 判断是否重复的依据是记录是否具有相同的'code', 'max_date_forward'。
+
+def update_dataset():
+    """
+    ### 更新数据集
+    """
+    all_stocks = get_all_stocks_info()
+    codes = [stock[0] for stock in all_stocks]
+    steps = 5
+
+    trade_cal = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
+    trade_cal = trade_cal[trade_cal['is_open'] == 1]
+    trade_cal = trade_cal.sort_values(by='cal_date', ascending=False)
+    last_cal_date = trade_cal.iloc[0]['cal_date']
+    print('最新交易日期:', last_cal_date)
+
+    for param in dataset_to_update:
+        FORWARD_DAYS = param['FORWARD_DAYS']
+        BACKWARD_DAYS = param['BACKWARD_DAYS']
+        DOWN_FILTER = param['DOWN_FILTER']
+        TO_UPDATE = param['TO_UPDATE']
+        if not TO_UPDATE:
+            continue
+        dataset_save_dir = f'{TEMP_DIR}/oversold/data_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}'
+        print(f'向前取{FORWARD_DAYS}天(含基准日)，向后取{BACKWARD_DAYS}天(不含基准日), 下跌幅度过滤值{DOWN_FILTER:.2%}')
+        print(f'数据集目录为:{dataset_save_dir}')
+
+        all_dataset_csv = f'{dataset_save_dir}/all_oversold_data_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
+        if os.path.exists(all_dataset_csv):
+            all_dataset_df = pd.read_csv(all_dataset_csv, dtype={'trade_date': str})
+            last_trade_date = str(all_dataset_df['trade_date'].max())[:8]
+            if last_trade_date == last_cal_date:
+                print(f'数据集{all_dataset_csv}已更新到最新交易日期{last_trade_date}')
+                print()
+                continue
+
+        # build the params list for the thread pool
+        params = [(code, FORWARD_DAYS, BACKWARD_DAYS, DOWN_FILTER) for code in codes]
+
+        # build all stock max down dataset
+        print('开始构建所有股票的最大下跌数据集，请稍等...')
+        bar = tqdm.tqdm(total=len(params), ncols=100)
+        for index in range(0, len(params), steps):
+            with ThreadPoolExecutor(max_workers=steps) as executor:
+                executor.map(create_stock_max_down_dataset, params[index:index+steps])
+            bar.update(steps)
+        bar.close()
+
+        # refresh all stock max down dataset
+        print('开始刷新所有股票的最大下跌数据集，请稍等...')
+        bar = tqdm.tqdm(total=len(params), ncols=100)
+        for index in range(0, len(params), steps):
+            with ThreadPoolExecutor(max_workers=steps) as executor:
+                executor.map(refresh_oversold_data_csv, params[index:index+steps])
+            bar.update(steps)
+        bar.close()
+
+        # merge all stock max down dataset
+        print('开始合并所有股票的最大下跌数据集，请稍等...')
+        merge_all_oversold_dataset(
+            forward_days= FORWARD_DAYS, 
+            backward_days= BACKWARD_DAYS, 
+            down_filter= DOWN_FILTER
+        )
+        print('数据集构建完成！')
+        print()

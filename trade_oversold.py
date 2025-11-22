@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import pandas as pd
 import datetime
 import logging
@@ -7,12 +8,12 @@ from typing import Literal
 from threading import Lock
 from stocklist import get_name_and_industry_by_code
 from concurrent.futures import ThreadPoolExecutor
-from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, 
+from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, STOP_BUYING,
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST, MAX_BUY_UP_RATE,
                             DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV,
-                            HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN)
-from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, TEST_DIR
+                            HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN, exception_list, dataset_to_predict_trade)
+from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, TEST_DIR, PREDICT_DIR
 from cons_hidden import bark_device_key
 from utils import (send_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
                    get_up_down_limit, early_sell_standard_oversold_v2, is_rising_or_not, is_decreasing_or_not, 
@@ -318,6 +319,7 @@ def scan_buy_in_list():
         ### 扫描买入列表单行信息
         #### :param idx_row: index, row
         #### 买入逻辑
+        - 如果设置了停止买入新股票，跳过
         - 未获取到实时价格，跳过
         - 价格高于买入基准点buy_point_base的限定幅度MAX_BUY_UP_RATE, 跳过
         - 价格低于最低股票价格，跳过
@@ -338,6 +340,8 @@ def scan_buy_in_list():
         waiting_days = row['waiting_days']
         price_now = get_stock_realtime_price(code)
         print(f'({MODEL_NAME}) {row["ts_code"]} {row["stock_name"]} price_now: {price_now}')
+        if STOP_BUYING is True:
+            return
         if price_now is None or price_now <= 0:
             return
         if price_now >= buy_point_base * (1 + MAX_BUY_UP_RATE): 
@@ -775,8 +779,8 @@ def XD_holding_list():
         return
     with lock:
         holding_df = pd.read_csv(HOLDING_LIST, dtype={'trade_date': str, 'date_in': str})
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
-        holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
+        # holding_df['date_in'] = holding_df['date_in'].apply(lambda x: str(x)[:8])
+        # holding_df['date_in'] = holding_df['date_in'].apply(lambda x: x if x != 'nan' else '')
     origin_holding_df = pd.read_csv(HOLDING_LIST_ORIGIN, dtype={'trade_date': str, 'date_in': str})
     today = datetime.datetime.now().strftime('%Y%m%d')
 
@@ -868,6 +872,100 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         # 恢复原始交易目录
         shutil.copytree(f'{trade_dir}_copy', trade_dir, dirs_exist_ok=True)
         shutil.rmtree(f'{trade_dir}_copy')
+
+def build_buy_in_list():
+    """
+    ### 构建买入清单 buy_in_list.csv
+    """
+    print('creating and saving sub buy_in_list csv files...')
+    for dataset in dataset_to_predict_trade:
+        FORWARD_DAYS = dataset['FORWARD_DAYS']
+        BACKWARD_DAYS = dataset['BACKWARD_DAYS']
+        DOWN_FILTER = dataset['DOWN_FILTER']
+        PRED_MODELS = dataset['PRED_MODELS']
+        if PRED_MODELS == 0:
+            continue
+
+        # prepare data from trade_pred.csv within TRADE_COVERAGE_DAYS days
+        pred_path = f'{PREDICT_DIR}/oversold/pred_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}'
+        os.makedirs(pred_path, exist_ok=True)
+        csv_name = f'{pred_path}/trade_pred_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
+        trade_df = pd.read_csv(csv_name, dtype={'trade_date': str})
+
+        # add trade_date's close price (buy_point_base) and waiting_days to trade_df
+        trade_df.insert(4, 'buy_point_base', None)
+        trade_df.insert(9, 'waiting_days', None)
+        for i , row in trade_df.iterrows():
+            code = row['code']
+            industry = row['industry']
+            trade_date = row['trade_date']
+            daily_csv = f'{BASICDATA_DIR}/dailydata/{code}.csv'
+            daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
+            close = daily_df[daily_df['trade_date'] == trade_date]['close'].values[0]
+            trade_df.loc[i, 'buy_point_base'] = close
+
+            # calculate days between trade_date and today
+            daily_csv = f'{BASICDATA_DIR}/dailydata/{code}.csv' 
+            daily_df = pd.read_csv(daily_csv, dtype={'trade_date': str})
+            daily_df = daily_df.sort_values(by='trade_date', ascending=True)
+            today = datetime.datetime.now().strftime('%Y%m%d')
+            trade_dates = daily_df['trade_date'].tolist()
+            trade_date_index = trade_dates.index(trade_date)
+            if today not in trade_dates:
+                today_index = len(trade_dates) - 1
+                days = today_index - trade_date_index + 1  # 今日未收盘，未在daily_df中，所以+1
+            else:
+                today_index = trade_dates.index(today)
+                days = today_index - trade_date_index
+            trade_df.loc[i, 'waiting_days'] = days
+        trade_df['pred_100%'] = trade_df['pred'].map(lambda x: f'{x:.2%}')
+
+        # filter trade_df
+        trade_df = trade_df[trade_df['pred'] > MIN_PRED_RATE]
+        trade_df = trade_df[~trade_df['name'].str.contains('|'.join(exception_list))]
+        trade_df = trade_df.reset_index(drop=True)
+        # save trade_df to csv
+        trade_dir = f'{TRADE_DIR}/oversold'
+        os.makedirs(trade_dir, exist_ok=True)
+        trade_df.to_csv(f'{trade_dir}/buy_in_list_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv', index=False)
+        print(f'buy_in_list_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv saved')
+
+    trade_dir = f'{TRADE_DIR}/oversold'
+    os.makedirs(trade_dir, exist_ok=True)
+    all_df = pd.DataFrame()
+    for dataset in dataset_to_predict_trade:
+        FORWARD_DAYS = dataset['FORWARD_DAYS']
+        BACKWARD_DAYS = dataset['BACKWARD_DAYS']
+        DOWN_FILTER = dataset['DOWN_FILTER']
+        PRED_MODELS = dataset['PRED_MODELS']
+        if PRED_MODELS == 0:
+            continue
+        list_name = f'buy_in_list_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}.csv'
+        buy_in_csv = f'{trade_dir}/{list_name}'
+        buy_in_df = pd.read_csv(buy_in_csv)
+        buy_in_df['src'] = list_name
+        all_df = pd.concat([all_df, buy_in_df], ignore_index=True)
+    # drop duplicate rows with same code and trade_date, save the highest pred row
+    all_df = all_df.sort_values(by=['code', 'trade_date', 'pred'], ascending=[True, True, True])
+    all_df = all_df.drop_duplicates(subset=['code', 'trade_date'], keep='last')
+    # rename columns and save to buy_in_list.csv
+    new_columns = ['ts_code', 'stock_name', 'industry', 'trade_date', 'buy_point_base', 'chg_pct', 'max_date_forward', 
+                    'max_down_rate', 'forward_days', 'waiting_days', 'pred', 'real', 'pred_100%', 'src']
+    all_df.columns = new_columns
+    # 检查 ts_code 相同的行，选出其中最小的 waiting_days，如果 MAX_TRADE_DAYS - 最小waiting_days < REST_TRADE_DAYS，
+    # 则舍弃这些行，以保证买入后的股票有足够的交易天数等待股价的反弹。舍弃这些行的目的是为了减少后续买入程序中检查的计算量。当一个
+    # 下跌趋势在横盘了较长时间后，又开始下跌，其新的序列的 waiting_days从 1 重新开始，原先不被删除的某些行会重新加入到买入清单中。 
+    ts_codes = all_df['ts_code'].unique().tolist()
+    indices_to_drop = []
+    for ts_code in ts_codes:
+        df_code = all_df[all_df['ts_code'] == ts_code]
+        min_waiting_days = df_code['waiting_days'].min()
+        if MAX_TRADE_DAYS - min_waiting_days < REST_TRADE_DAYS:
+            indices_to_drop.extend(df_code.index.tolist())
+    all_df = all_df.drop(indices_to_drop)
+    all_df.to_csv(f'{trade_dir}/buy_in_list.csv', index=False)  # BUY_IN_LIST
+    shutil.copy(f'{trade_dir}/buy_in_list.csv', BUY_IN_LIST_ORIGIN)  # BUY_IN_LIST_ORIGIN for xd
+    print(f'buy_in_list.csv saved with {len(all_df)} records and {len(ts_codes)} stocks')
 
 if __name__ == '__main__':
     import time
