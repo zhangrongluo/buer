@@ -466,7 +466,7 @@ def scan_buy_in_list(max_trade_days:int):
         # price_now = prices_dict.get(code)
         price_now = get_stock_realtime_price(code)
         print(f'({MODEL_NAME}) {row['ts_code']} {row['stock_name']} price_now: {price_now}')
-        if STOP_BUYING is True:
+        if STOP_BUYING:
             return
         if price_now is None:
             return

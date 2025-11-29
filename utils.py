@@ -50,13 +50,13 @@ def send_message_via_pushover(user_key, app_token, title, message):
     response = requests.post(url, data=data).json()
     return response
 
-def get_stock_price_from_sina(code: str) -> float | None:
+def get_stock_price_from_sina_via_automation(code: str) -> float | None:
     """ 
-    ### 从sina财经获取股票实时价格(chromium方式)
+    ### 从sina财经获取股票实时价格(chromium浏览器自动化方式)
     #### :param code: 股票代码, 格式为 000001 or 000001.SH
     #### :return: 股票实时价格
     #### NOTE: 
-    #### 速度较慢
+    #### 速度较慢, 最后的渠道
     """
     try:
         code = code[:6]
@@ -161,12 +161,35 @@ def get_stock_realtime_price(code: str) -> float | None:
     if price_now is None:
         price_now = get_stock_price_from_tencent(code=code)
     if price_now is None:
-        price_now = get_stock_price_from_sina(code=code)
+        price_now = get_stock_price_from_sina_via_automation(code=code)
     else:
         time.sleep(PAUSE)
     return price_now
 
-def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.DataFrame:
+def get_realtime_price_DF_from_tushare(
+        ts_code: str,  datalen: int = 15, 
+        freq: Literal['1MIN', '5MIN', '15MIN', '30MIN', '60MIN']='1MIN',
+) -> pd.DataFrame:
+    """
+    ### 从 tushare获取实时分钟线数据
+    #### :param ts_code: 股票代码, 如600000.SH或者 600000
+    #### :param datalen: 数据行数, 默认15行
+    #### :param freq: 频率, 1MIN, 5MIN, 15MIN, 30MIN, 60MIN, 默认1MIN
+    #### :return: DataFrame
+    #### NOTE:
+    #### 返回列名: code, freq, time, open, high, low, close, vol, amount
+    """
+    if len(ts_code) == 6:
+        ts_code = ts_code + '.SH' if ts_code.startswith('6') else ts_code + '.SZ'
+    try:
+        pro = ts.pro_api()
+        df = pro.rt_min_daily(ts_code=ts_code, freq=freq).tail(datalen)
+    except Exception as e:
+        print(f"从 tushare获取数据出错: {e}")
+        return pd.DataFrame(columns=['code', 'freq', 'time', 'open', 'high', 'low', 'close', 'vol', 'amount'])
+    return df
+
+def get_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.DataFrame:
     """
     ### 获取新浪财经今日历史实时价格数据(分钟数据)
     #### :param code: 股票代码, 如 000001 或 000001.SZ, 要转换为 sh600000 或 sz000001 格式
@@ -176,6 +199,7 @@ def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.Dat
     #### NOTE:
     #### url = 'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?
     #### symbol=[股票代码]&scale=[分钟周期]&ma=no&datalen=[数据长度]', ma=no 表示不返回均线数据
+    #### 交易时间段内频繁请求会报错
     """
     code = f'sh{code[:6]}' if code.startswith('6') else f'sz{code[:6]}'
     url = f'https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData?\
@@ -184,21 +208,24 @@ def get_history_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.Dat
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
             (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }
-    response = requests.get(url, headers=headers)
-    data = response.json() if response.status_code == 200 else None
-    res_df = pd.DataFrame(data) if data else pd.DataFrame(columns=['day', 'open', 'high', 'low', 'close'])
-    if not res_df.empty:
-        today = datetime.datetime.now().strftime('%Y-%m-%d')
-        res_df = res_df[res_df['day'].str.startswith(today)]
-        res_df[['open', 'high']] = res_df[['open', 'high']].apply(pd.to_numeric, errors='coerce')
-        res_df[['low', 'close']] = res_df[['low', 'close']].apply(pd.to_numeric, errors='coerce')
-        res_df = res_df[['day', 'open', 'high', 'low', 'close']]
-        res_df = res_df.reset_index(drop=True)
-    else:
-        print(f'获取新浪数据失败:{response.status_code},请检查 token 设置、网络连接或是否为交易日')
-    return res_df
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # 检查请求是否成功
+        data = response.json() if response.status_code == 200 else None
+        res_df = pd.DataFrame(data) if data else pd.DataFrame(columns=['day', 'open', 'high', 'low', 'close'])
+        if not res_df.empty:
+            today = datetime.datetime.now().strftime('%Y-%m-%d')
+            res_df = res_df[res_df['day'].str.startswith(today)]
+            res_df[['open', 'high']] = res_df[['open', 'high']].apply(pd.to_numeric, errors='coerce')
+            res_df[['low', 'close']] = res_df[['low', 'close']].apply(pd.to_numeric, errors='coerce')
+            res_df = res_df[['day', 'open', 'high', 'low', 'close']]
+            res_df = res_df.reset_index(drop=True)
+        return res_df
+    except Exception as e:
+        print(f'获取新浪实时价格数据序列失败: {e}')
+        return pd.DataFrame(columns=['day', 'open', 'high', 'low', 'close'])
 
-def get_history_realtime_price_DF_from_dc(code, klt=1, datalen=15) -> pd.DataFrame:
+def get_realtime_price_DF_from_dc(code, klt=1, datalen=15) -> pd.DataFrame:
     """
     ### 从东方财富获取股票分钟级别价格数据
     #### :param code: 股票代码, 000001或者000001.SZ, 需转化成 sz000001 或则sh600000 格式
@@ -207,6 +234,7 @@ def get_history_realtime_price_DF_from_dc(code, klt=1, datalen=15) -> pd.DataFra
     #### :return: DataFrame 包含 day、open、close、high、low 列
     #### NOTE:
     #### 参数详细说明见 https://www.sanrenjz.com/2023/03/31/, written by Grok
+    #### 交易时间段内频繁请求会报错
     """
     code = 'sh' + code[:6] if code.startswith('6') else 'sz' + code[:6]
     market = '1' if code.startswith('sh') else '0'
@@ -567,16 +595,19 @@ def is_rising_or_not(code, price_now: float, method: Literal['max', 'mean'] = 'm
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
-    rt_price_df = get_history_realtime_price_DF_from_sina(code)
+    rt_price_df = get_realtime_price_DF_from_tushare(code)
     if rt_price_df.empty:
-        rt_price_df = get_history_realtime_price_DF_from_dc(code)
+        rt_price_df = get_realtime_price_DF_from_sina(code)
+    if rt_price_df.empty:
+        rt_price_df = get_realtime_price_DF_from_dc(code)
     if rt_price_df.empty:
         return False
     if method == 'mean':
         return price_now > rt_price_df['close'].mean()
     elif method == 'max':
         return price_now > rt_price_df['close'].max()
-    return False
+    else:
+        return False
 
 def is_decreasing_or_not(code, price_now: float, method: Literal['min', 'mean'] = 'mean') -> bool:
     """
@@ -590,16 +621,19 @@ def is_decreasing_or_not(code, price_now: float, method: Literal['min', 'mean'] 
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
-    rt_price_df = get_history_realtime_price_DF_from_sina(code)
+    rt_price_df = get_realtime_price_DF_from_tushare(code)
     if rt_price_df.empty:
-        rt_price_df = get_history_realtime_price_DF_from_dc(code)
+        rt_price_df = get_realtime_price_DF_from_dc(code)
+    if rt_price_df.empty:
+        rt_price_df = get_realtime_price_DF_from_sina(code)
     if rt_price_df.empty:
         return False
     if method == 'mean':
         return price_now < rt_price_df['close'].mean()
     elif method == 'min':
         return price_now < rt_price_df['close'].min()
-    return False
+    else:
+        return False
 
 def is_trade_date_or_not():
     """ 

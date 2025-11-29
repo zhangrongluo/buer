@@ -207,43 +207,50 @@ def auto_run():
         update_trade_cal_and_stock_list,
         trigger='cron',
         hour=0, minute=1, misfire_grace_time=300,
-        id='update_trade_cal_and_stock_list'
+        id='update_trade_cal_and_stock_list',
+        name='更新交易日历和股票列表'
     )
     scheduler.add_job(
         build_buy_in_list_task,
         trigger='cron',
         hour=1, minute=0, misfire_grace_time=300,
-        id='update_buy_in_list'
+        id='update_buy_in_list',
+        name='创建股票买入清单'
     )
     scheduler.add_job(
         get_limit_and_suspend_list_task,
         trigger='cron',
         hour=9, minute=20, misfire_grace_time=300,
-        id='get_limit_and_suspend_list_task'
+        id='get_limit_and_suspend_list_task',
+        name='获取涨跌停和停牌列表'
     )
     scheduler.add_job(
         get_up_down_limit_list,
         trigger='cron',
         hour=9, minute=28, misfire_grace_time=300,
-        id='get_up_down_limit_list_again'
+        id='get_up_down_limit_list_again',
+        name='再次获取涨跌停列表'
     )
     scheduler.add_job(
         download_and_update_adj_data_task,
         trigger='cron',
         hour=9, minute=30, second=15, misfire_grace_time=300,
-        id='download_and_update_adj_data_task'
+        id='download_and_update_adj_data_task',
+        name='下载并更新复权数据'
     )
     scheduler.add_job(
         XD_stock_list_task,
         trigger='cron',
         hour=9, minute=32, second=45, misfire_grace_time=300,
-        id='XD_stock_list_task'
+        id='XD_stock_list_task',
+        name='前复权股票买入清单和股票持有清单'
     )
     scheduler.add_job(
         check_pre_trade_data_update_status_task,
         trigger='cron',
         hour=9, minute=34, second=30, misfire_grace_time=300,
-        id='check_pre_trade_data_update_status_task'
+        id='check_pre_trade_data_update_status_task',
+        name='检查交易前数据更新状态'
     )
     scheduler.add_job(
         trading_task_am,
@@ -257,7 +264,8 @@ def auto_run():
         backup_trade_data,
         trigger='cron',
         hour=11, minute=45, misfire_grace_time=300,
-        id='backup_trade_data_am'
+        id='backup_trade_data_am',
+        name='备份上午交易数据'
     )
     scheduler.add_job(
         trading_task_pm,
@@ -271,37 +279,43 @@ def auto_run():
         calculate_today_statistics_indicators,
         trigger='cron',
         hour=15, minute=5, misfire_grace_time=300,
-        id='calculate_today_statistics_indicators'
+        id='calculate_today_statistics_indicators',
+        name='计算当天统计指标'
     )
     scheduler.add_job(
         backup_trade_data,
         trigger='cron',
         hour=15, minute=15, misfire_grace_time=300,
-        id='backup_trade_data_pm'
+        id='backup_trade_data_pm',
+        name='备份下午交易数据'
     )
     scheduler.add_job(
         update_daily_data_and_indicator,
         trigger='cron',
         hour=17, minute=5, misfire_grace_time=300,
-        id='update_daily_data_and_indicator'
+        id='update_daily_data_and_indicator',
+        name='更新每日数据、指标和简版量化因子数据'
     )
     scheduler.add_job(
         update_and_predict_dataset,
         trigger='cron',
         hour=17, minute=45, misfire_grace_time=300,
-        id='update_and_predict_dataset'
+        id='update_and_predict_dataset',
+        name='更新和预测数据集'
     )
     scheduler.add_job(
         check_daily_temp_data_update_status_task,
         trigger='cron',
         hour=19, minute=15, misfire_grace_time=300,
-        id='check_daily_temp_data_update_status_task'
+        id='check_daily_temp_data_update_status_task',
+        name='检查每日盘后数据更新状态'
     )
     scheduler.add_job(
         train_and_predict_dataset,
         trigger='cron',
-        day_of_week='sat', hour=1, minute=0, misfire_grace_time=300,
-        id='train_and_predict_dataset'
+        day_of_week='sun', hour=1, minute=0, misfire_grace_time=300,
+        id='train_and_predict_dataset',
+        name='周日训练和预测数据集'
     )
     scheduler.start()
     print(f'({MODEL_NAME}) 开始启动自动运行,按CTRL+C退出')
