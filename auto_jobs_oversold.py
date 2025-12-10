@@ -13,7 +13,7 @@ from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indi
                                     download_all_stocks_daily_temp_indicator_data, download_all_stocks_daily_simple_temp_quant_factor)
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, build_buy_in_list
 from cons_hidden import bark_device_key
-from cons_general import TRADE_CAL_CSV, TRADE_DIR, BACKUP_DIR
+from cons_general import TRADE_CAL_CSV, TRADE_DIR, BACKUP_DIR, BASICDATA_DIR
 from cons_oversold import MODEL_NAME
 from datasets_oversold import update_dataset
 from model_oversold import train_dataset
@@ -69,6 +69,20 @@ def update_and_predict_dataset():
     predict_dataset()
     today = datetime.datetime.now().date().strftime('%Y%m%d')
     print(f'({MODEL_NAME}) {today} oversold 数据集更新完成！')
+
+@is_trade_day(task='清理实时价格序列文件')
+def delete_realtime_price_csv_task():
+    rt_dir = f'{BASICDATA_DIR}/realtime'
+    files = os.listdir(rt_dir)
+    for file in files:
+        file_path = os.path.join(rt_dir, file)
+        try:
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        except Exception as e:
+            print(f'删除文件 {file_path} 失败: {e}')
+    today = datetime.datetime.now().date().strftime('%Y%m%d')
+    print(f'({MODEL_NAME}) {today} 清理实时价格文件完成！')
 
 @is_trade_day(task='构建买入清单')
 def build_buy_in_list_task():
@@ -209,6 +223,13 @@ def auto_run():
         hour=0, minute=1, misfire_grace_time=300,
         id='update_trade_cal_and_stock_list',
         name='更新交易日历和股票列表'
+    )
+    scheduler.add_job(
+        delete_realtime_price_csv_task,
+        trigger='cron',
+        hour=0, minute=15, misfire_grace_time=300,
+        id='delete_realtime_price_csv_task',
+        name='删除实时价格序列文件'
     )
     scheduler.add_job(
         build_buy_in_list_task,
