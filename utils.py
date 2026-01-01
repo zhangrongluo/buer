@@ -3,15 +3,14 @@ import re
 import time
 import json
 import pandas as pd
-import aiohttp
-import asyncio
 import datetime
 import requests
 import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
 from basic_data_alt_edition import download_dividend_data_in_multi_ways
-from cons_general import TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, TEMP_DIR, DAILY_ADJFACTOR_TEMP_CSV, DATASETS_DIR
+from cons_general import (TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, 
+                          TEMP_DIR, DAILY_ADJFACTOR_TEMP_CSV, DATASETS_DIR, RISK_FREE_RATE)
 from cons_oversold import PAUSE
 from cons_downgap import dataset_group_cons
 
@@ -101,55 +100,16 @@ def get_stock_price_from_tencent(code: str) -> float | None:
         return price
     except Exception as e:
         return None
-    
-async def async_get_stock_price_from_tencent(code: str) -> float | None:
-    """
-    ### 从腾讯财经获取指定股票实时价格(asyncio异步方式)
-    #### :param code: 股票代码, 格式为 000001 or 000001.SH
-    #### :return: 股票实时价格
-    """
-    stock_code = code[:6]
-    stock_code = 'sh' + stock_code if code[0] == '6' else 'sz' + stock_code
-    try:
-        url = f"https://qt.gtimg.cn/q={stock_code}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-                (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=5) as response:
-                response.raise_for_status()  # 检查请求是否成功
-                # 解析数据腾讯财经返回的数据,格式:v_sh600036="1~招商银行~600036~40.74...";
-                data = await response.text()
-                if not data or "v_" not in data:
-                    return None
-                data_content = data.split("=")[1]
-                data_list = data_content.split("~")
-                price = data_list[3]  # realtime price
-                price = float(price)
-                return price
-    except Exception as e:
-        return None
-
-async def get_all_prices_async(ts_codes: list[str]) -> dict[str, float | None]:
-    """
-    ### 异步并发获取多个股票股价(腾讯财经)
-    #### :param ts_codes: 股票代码列表, 如 ['000001.SZ', '600000.SH']
-    #### :return: 字典, 股票代码为键, 实时价格为值
-    """
-    tasks = [async_get_stock_price_from_tencent(code) for code in ts_codes]
-    prices = await asyncio.gather(*tasks, return_exceptions=True)
-    results = {}
-    for code, price in zip(ts_codes, prices):
-        if isinstance(price, Exception):
-            results[code] = None
-        else:
-            results[code] = price
-    return results
-    
-def get_stock_realtime_price(code: str) -> float | None:
+        
+def get_stock_realtime_price(code: str, to_csv: bool = True) -> float | None:
     """
     ### 采用多重模式获取股票实时交易价格
+    #### :param code: 股票代码, 如 000001 或 000001.SZ
+    #### :param to_csv: 是否将实时价格保存到 CSV 文件, 作为替代数据源, 默认 True
+    #### NOTE:
+    #### 文件路径为BASICDATA_DIR/realtime/ts_code.csv
+    #### 按照时间顺序保存价格序列, 同一分钟之内保存最新的价格
+    #### columns 包括 ts_code, datetime, close 三项
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
@@ -164,14 +124,60 @@ def get_stock_realtime_price(code: str) -> float | None:
         price_now = get_stock_price_from_sina_via_automation(code=code)
     else:
         time.sleep(PAUSE)
+    # 保存价格序列
+    if to_csv and price_now is not None and is_trade_date_or_not():
+        now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        rt_dir = f'{BASICDATA_DIR}/realtime'
+        os.makedirs(rt_dir, exist_ok=True)
+        rt_csv = f'{rt_dir}/{code}.csv'
+        if os.path.exists(rt_csv):
+            rt_df = pd.read_csv(rt_csv, dtype={'ts_code': str, 'datetime': str, 'close': float})
+            rt_df = rt_df.sort_values(by='datetime', ascending=True)  # 升序排列
+            # 取出最后一行，比较 datetime 和 now_str，如果 datetime 和 now_str 为同一分钟，
+            # 用 price_now 替代 close，now_str 替代 datetime，如果不是同一分钟，则在最后插入一行
+            last_datetime_str = rt_df['datetime'].iloc[-1]
+            if last_datetime_str[:16] == now_str[:16]:
+                rt_df.at[rt_df.index[-1], 'datetime'] = now_str
+                rt_df.at[rt_df.index[-1], 'close'] = price_now
+            else:
+                new_row = pd.DataFrame({'ts_code': [code], 'datetime': [now_str], 'close': [price_now]})
+                rt_df = pd.concat([rt_df, new_row], ignore_index=True)
+        else:
+            rt_df = pd.DataFrame({'ts_code': [code], 'datetime': [now_str], 'close': [price_now]})
+        rt_df.to_csv(rt_csv, index=False)
     return price_now
+
+def get_realtime_price_DF_from_local_csv(ts_code: str, datalen: int = 15) -> pd.DataFrame:
+    """
+    ### 从本地实时价格 csv 文件获取分钟数据序列用于判断上涨或者下跌趋势
+    #### :param ts_code: 股票代码, 如600000.SH或者 600000
+    #### :param datalen: 数据行数, 默认15行
+    #### :return: DataFrame
+    #### NOTE:
+    #### 返回列名: ts_code, datetime, close 三项
+    #### 通过utils.get_stock_realtime_price建立csv, 用于替代tushare收费接口
+    """
+    if len(ts_code) == 6:
+        ts_code = ts_code + '.SH' if ts_code.startswith('6') else ts_code + '.SZ'
+    rt_csv = f'{BASICDATA_DIR}/realtime/{ts_code}.csv'
+    if not os.path.exists(rt_csv):
+        return pd.DataFrame(columns=['ts_code', 'datetime', 'close'])
+    try:
+        df = pd.read_csv(rt_csv, dtype={'ts_code': str, 'datetime': str, 'close': float})
+        if df.empty:
+            return pd.DataFrame(columns=['ts_code', 'datetime', 'close'])
+        df = df.sort_values(by='datetime', ascending=True)  # 升序排列
+        return df.tail(datalen).reset_index(drop=True)
+    except Exception as e:
+        print(f"读取实时价格数据失败: {e}")
+        return pd.DataFrame(columns=['ts_code', 'datetime', 'close'])
 
 def get_realtime_price_DF_from_tushare(
         ts_code: str,  datalen: int = 15, 
         freq: Literal['1MIN', '5MIN', '15MIN', '30MIN', '60MIN']='1MIN',
 ) -> pd.DataFrame:
     """
-    ### 从 tushare获取实时分钟线数据
+    ### 从 tushare获取实时分钟线数据(收费接口)
     #### :param ts_code: 股票代码, 如600000.SH或者 600000
     #### :param datalen: 数据行数, 默认15行
     #### :param freq: 频率, 1MIN, 5MIN, 15MIN, 30MIN, 60MIN, 默认1MIN
@@ -184,10 +190,10 @@ def get_realtime_price_DF_from_tushare(
     try:
         pro = ts.pro_api()
         df = pro.rt_min_daily(ts_code=ts_code, freq=freq).tail(datalen)
+        return df
     except Exception as e:
         print(f"从 tushare获取数据出错: {e}")
         return pd.DataFrame(columns=['code', 'freq', 'time', 'open', 'high', 'low', 'close', 'vol', 'amount'])
-    return df
 
 def get_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.DataFrame:
     """
@@ -592,10 +598,13 @@ def is_rising_or_not(code, price_now: float, method: Literal['max', 'mean'] = 'm
     #### :return: True if stock is rising, False otherwise
     #### NOTE:
     #### 如果 price_now 超过前 15 分钟平均价(最高价), 则认为上涨
+    #### local_csv -> tushare(收费接口) -> sina -> dc
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
-    rt_price_df = get_realtime_price_DF_from_tushare(code)
+    rt_price_df = get_realtime_price_DF_from_local_csv(code)
+    if rt_price_df.empty:
+        rt_price_df = get_realtime_price_DF_from_tushare(code)
     if rt_price_df.empty:
         rt_price_df = get_realtime_price_DF_from_sina(code)
     if rt_price_df.empty:
@@ -618,10 +627,13 @@ def is_decreasing_or_not(code, price_now: float, method: Literal['min', 'mean'] 
     #### :return: True if stock is decreasing, False otherwise
     #### NOTE:
     #### 如果 price_now 低于前 15 分钟平均价(最低价), 则认为下跌
+    #### local_csv -> tushare(收费接口) -> dc -> sina
     """
     if len(code) == 6:
         code = code + '.SH' if code.startswith('6') else code + '.SZ'
-    rt_price_df = get_realtime_price_DF_from_tushare(code)
+    rt_price_df = get_realtime_price_DF_from_local_csv(code)
+    if rt_price_df.empty:
+        rt_price_df = get_realtime_price_DF_from_tushare(code)
     if rt_price_df.empty:
         rt_price_df = get_realtime_price_DF_from_dc(code)
     if rt_price_df.empty:
@@ -1126,6 +1138,175 @@ def calculate_max_drawdown_ratio(
     drawdown = (cumulative_return - rolling_max) / rolling_max
     max_drawdown = drawdown.min()
     return round(abs(max_drawdown), 4)
+
+### 绘图函数
+def plot_portfolio_earning_charts(
+        name: Literal['oversold', 'downgap'], start=None, end=None, index_code=None, **kwargs
+):
+    """
+    ### 绘制投资组合累计利润和累计收益率图表(上下排列)
+    #### :param name: 策略名称, oversold or downgap
+    #### :param start: 开始日期,'YYYYMMDD' 格式, 默认为 None (从最早数据开始)
+    #### :param end: 结束日期,'YYYYMMDD' 格式, 默认为 None (到最新数据为止)
+    #### :param index_code: 基准指数代码, 如 '000001.SH', 默认为 None (不绘制基准指数)
+    #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
+    #### :return: None
+    #### NOTE:
+    #### 上图: 投资组合累计利润曲线, 数据源为 daily_profit.csv中 trade_date 和 delta 列
+    #### 累计收益需要根据 delta 列计算得出: delta 列的累积和
+    #### 下图: 投资组合累计收益率曲线, 数据源为 statistic_indicator.csv 中 trade_date 和 return_ratio 列
+    #### 累计收益率需要根据 return_ratio 列计算得出: (1 + return_ratio).cumprod() - 1
+    #### 图标横坐标部分含头尾均匀显示: 
+    #### 5个以内全部显示, 5-10 个显示5 个, 10-100 个显示8个, 超过 100 个显示 10 个
+    """
+    if name.upper() not in ['OVERSOLD', 'DOWNGAP']:
+        raise ValueError(f"Name {name} not in ['oversold', 'downgap']")
+    if name.upper() == 'OVERSOLD':
+        trade_root = f'{TRADE_DIR}/oversold'
+    if name.upper() == 'DOWNGAP':
+        max_trade_days = kwargs.get('max_trade_days')
+        if max_trade_days is None:
+            raise ValueError("max_trade_days is required for downgap strategy")
+        if not isinstance(max_trade_days, (int, float)):
+            raise ValueError("max_trade_days must be an integer or float for downgap strategy")
+        if int(max_trade_days) not in dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']:
+            raise ValueError(
+                f"max_trade_days must be in {dataset_group_cons['common']['MAX_TRADE_DAYS_LIST']}"
+            )
+        max_trade_days = int(max_trade_days)
+        trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
+    daily_profit_csv = f'{trade_root}/daily_profit.csv'
+    statistic_indicator_csv = f'{trade_root}/statistic_indicator.csv'
+    if not os.path.exists(daily_profit_csv) or not os.path.exists(statistic_indicator_csv):
+        return
+    profit_df = pd.read_csv(daily_profit_csv, dtype={'trade_date': str})
+    indicator_df = pd.read_csv(statistic_indicator_csv, dtype={'trade_date': str})
+    if start is not None:
+        profit_df = profit_df[profit_df['trade_date'] >= start]
+        indicator_df = indicator_df[indicator_df['trade_date'] >= start]
+    if end is not None:
+        profit_df = profit_df[profit_df['trade_date'] <= end]
+        indicator_df = indicator_df[indicator_df['trade_date'] <= end]
+    if profit_df.empty or indicator_df.empty:
+        return
+    profit_df = profit_df.sort_values(by='trade_date', ascending=True)
+    profit_df = profit_df.reset_index(drop=True)
+    indicator_df = indicator_df.sort_values(by='trade_date', ascending=True)
+    indicator_df = indicator_df.reset_index(drop=True)
+    indicator_df['cumulative_return'] = (1 + indicator_df['return_ratio']).cumprod() - 1
+    # 绘图(显示中文)
+    import matplotlib.pyplot as plt
+    plt.rcParams['font.sans-serif'] = ['Songti SC'] # 设置中文显示
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    ax1.plot(profit_df['trade_date'], profit_df['delta'].cumsum(), label='累计利润', color='blue')
+    title1 = f'累计利润 >>> {name.capitalize()} 策略' if name.upper() == 'OVERSOLD' else \
+        f'累计利润 >>> {name.capitalize()} 策略 {max_trade_days} 天组'
+    ax1.set_title(title1)
+    ax1.set_ylabel('累计利润')
+    ax1.grid(True)
+    ax1.legend()
+    ax2.plot(indicator_df['trade_date'], indicator_df['cumulative_return'], label='累计收益率', color='green')
+    # 绘制基准指数曲线
+    if index_code is not None:
+        pro = ts.pro_api()
+        index_df = pro.index_daily(ts_code=index_code, start_date=start, end_date=end)
+        if not index_df.empty:
+            index_df = index_df[['trade_date', 'pct_chg']]
+            index_df = index_df.sort_values(by='trade_date', ascending=True)
+            indicator_df = indicator_df.merge(index_df, on='trade_date', how='left')
+            indicator_df['index_return'] = (1 + indicator_df['pct_chg'] / 100).cumprod() - 1
+            ax2.plot(indicator_df['trade_date'], indicator_df['index_return'], 
+                    label=f'基准指数 {index_code}', color='orange', linestyle='--')
+    title2 = f'累计收益率 >>> {name.capitalize()} 策略' if name.upper() == 'OVERSOLD' else \
+        f'累计收益率 >>> {name.capitalize()} 策略 {max_trade_days} 天组'
+    ax2.set_title(title2)
+    ax2.set_ylabel('累计收益率')
+    ax2.grid(True)
+    ax2.legend()
+    # 填充曲线至横轴之间的区域
+    ax1.fill_between(profit_df['trade_date'], profit_df['delta'].cumsum(), color='lightblue', alpha=0.25)
+    # ax2.fill_between(indicator_df['trade_date'], indicator_df['cumulative_return'], color='lightgreen', alpha=0.25)
+    # 标记最大值
+    max_profit = profit_df['delta'].cumsum().max()
+    max_profit_date = profit_df.loc[profit_df['delta'].cumsum().idxmax()]['trade_date']
+    ax1.annotate(f'最大值: {max_profit:,.2f}',
+                 xy=(max_profit_date, max_profit), 
+                    xytext=(max_profit_date, max_profit * 1.12),
+                    arrowprops=dict(facecolor='red', shrink=0.05, alpha=0.75),
+                    horizontalalignment='center')
+    max_cum_return = indicator_df['cumulative_return'].max()
+    max_cum_return_date = indicator_df.loc[indicator_df['cumulative_return'].idxmax()]['trade_date']
+    ax2.annotate(f'最大值: {max_cum_return:,.2%}',
+                 xy=(max_cum_return_date, max_cum_return), 
+                    xytext=(max_cum_return_date, max_cum_return * 1.12),
+                    arrowprops=dict(facecolor='red', shrink=0.05, alpha=0.75),
+                    horizontalalignment='center')
+    # 标记最后一天的值
+    final_profit = profit_df['delta'].cumsum().iloc[-1]
+    final_profit_date = profit_df['trade_date'].iloc[-1]
+    ax1.annotate(f'最终值: {final_profit:,.2f}',
+                 xy=(final_profit_date, final_profit), 
+                    xytext=(final_profit_date, final_profit * 0.85),
+                    arrowprops=dict(facecolor='blue', shrink=0.05, alpha=0.75),
+                    horizontalalignment='center')
+    final_cum_return = indicator_df['cumulative_return'].iloc[-1]
+    final_cum_return_date = indicator_df['trade_date'].iloc[-1]
+    ax2.annotate(f'最终值: {final_cum_return:,.2%}',
+                 xy=(final_cum_return_date, final_cum_return), 
+                    xytext=(final_cum_return_date, final_cum_return * 0.85),
+                    arrowprops=dict(facecolor='blue', shrink=0.05, alpha=0.75),
+                    horizontalalignment='center')
+    # 在图二右下方显示mdd、年化收益率等指标
+    total_days = (datetime.datetime.strptime(indicator_df['trade_date'].iloc[-1], '%Y%m%d') -
+                  datetime.datetime.strptime(indicator_df['trade_date'].iloc[0], '%Y%m%d')).days
+    total_return = indicator_df['cumulative_return'].iloc[-1]
+    if total_days > 0:
+        mdd = calculate_max_drawdown_ratio(name, start=start, end=end, **kwargs)
+        sharpe_ratio = calculate_sharpe_ratio(name, rf=RISK_FREE_RATE, start=start, end=end, **kwargs)
+        omega_ratio = calculate_omega_ratio(name, start=start, end=end, **kwargs)
+        win_rate_stocks = indicator_df['win_rate_stocks'].iloc[-1]
+        annualized_return = (1 + total_return) ** (365 / total_days) - 1
+        start_date = indicator_df['trade_date'].iloc[0]
+        end_date = indicator_df['trade_date'].iloc[-1]
+        msg_show = f"""
+            开始日期: {start_date:>20}
+            结束日期: {end_date:>20}
+            统计天数: {total_days:>20,}天
+            夏普比率: {sharpe_ratio:>22,.4f}
+            Omega比率: {omega_ratio:>22,.4f}
+            年化收益率: {annualized_return:>20,.2%}
+            最大回撤率: {mdd:>21,.2%}
+            成交股票胜率: {win_rate_stocks/100:>20,.2%}
+        """
+        ax2.text(0.95, 0.05, msg_show,
+                transform=ax2.transAxes,
+                horizontalalignment='right',
+                verticalalignment='bottom',
+                fontsize=12, color='red',)
+    # 设置横坐标
+    total_dates = len(indicator_df)
+    if total_dates <= 5:
+        xticks = indicator_df['trade_date'].tolist()
+    elif 5 < total_dates <= 10:
+        step = max(1, total_dates // 5)
+        xticks = indicator_df['trade_date'][::step].tolist()[:-1]
+        if indicator_df['trade_date'].iloc[-1] not in xticks:
+            xticks.append(indicator_df['trade_date'].iloc[-1])
+    elif 10 < total_dates <= 100:
+        step = max(1, total_dates // 8)
+        xticks = indicator_df['trade_date'][::step].tolist()[:-1]
+        if indicator_df['trade_date'].iloc[-1] not in xticks:
+            xticks.append(indicator_df['trade_date'].iloc[-1])
+    else:
+        step = max(1, total_dates // 10)
+        xticks = indicator_df['trade_date'][::step].tolist()[:-1] # 去掉倒数第二个，防止最后两个重叠显示
+        if indicator_df['trade_date'].iloc[-1] not in xticks:
+            xticks.append(indicator_df['trade_date'].iloc[-1])
+    ax2.set_xticks(xticks)
+    # 布局显示
+    plt.tight_layout()
+    plt.show()
 
 ### 缺口统计相关函数
 def get_all_gaps_statistic_general_infomation() -> pd.DataFrame | None:

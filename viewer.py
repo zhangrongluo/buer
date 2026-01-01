@@ -2,6 +2,7 @@ import wx
 import pandas as pd
 import os
 from utils import  calculate_sharpe_ratio
+from cons_general import RISK_FREE_RATE
 
 oversold_hd_csv = 'trade/oversold/holding_list.csv'
 oversold_indicator_csv = 'trade/oversold/statistic_indicator.csv'
@@ -15,7 +16,7 @@ downgap_profit_csv_50 = 'trade/downgap/max_trade_days_50/daily_profit.csv'
 downgap_hd_csv_60 = 'trade/downgap/max_trade_days_60/holding_list.csv'
 downgap_indicator_csv_60 = 'trade/downgap/max_trade_days_60/statistic_indicator.csv'
 downgap_profit_csv_60 = 'trade/downgap/max_trade_days_60/daily_profit.csv'
-rf_rate = 0.016  # 无风险利率
+rf_rate = RISK_FREE_RATE  # 无风险利率
 
 class MainFrame(wx.Frame):
     def __init__(self):
