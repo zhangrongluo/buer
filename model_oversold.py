@@ -1,11 +1,11 @@
 import os
 import time # type: ignore
 import random
-from tensorflow.keras import layers  # type: ignore
 import pandas as pd  # type: ignore
 from tensorflow import keras  
 from cons_general import TEMP_DIR, MODELS_DIR
 from cons_oversold import dataset_to_train, TEST_DATASET_PERCENT
+from models import get_resnet_model_src, get_resnet_model_optimized, get_simple_dense_model
 
 def train_dataset():
     """
@@ -55,30 +55,9 @@ def train_dataset():
         y_train_valid = df_label[:-test_length]
         x_test = df_train_valid_test[-test_length:]
         y_test = df_label[-test_length:]
-        
-        # build the model
-        def get_model(depth: int = 6, drop_rate: float = 0.5):
-            inputs = keras.Input(shape=(x_train_valid.shape[1],))
-            feature = layers.BatchNormalization()(inputs)
-            residual = feature
-            for dep in range(depth+3, 4, -1):
-                feature = layers.Dense(2**dep, activation='relu')(feature)
-                feature = layers.Dropout(drop_rate)(feature)
-                if dep % 3 == 0:
-                    feature = layers.BatchNormalization()(feature)
-                if dep == 7:  # 残差连接
-                    if feature.shape[1] != residual.shape[1]:
-                        residual = layers.Dense(2**dep)(residual)
-                        feature = layers.add([feature, residual])
-                    else:
-                        feature = layers.add([feature, residual])
-            outputs = layers.Dense(1)(feature)
-            model = keras.Model(inputs, outputs)
-            optimizer = random.choice(['adam', 'rmsprop'])
-            model.compile(optimizer=optimizer, loss='mse', metrics=['mae', 'mape'])
-            return model
-        
+                
         # 训练模型
+        input_dim = x_train_valid.shape[1]
         model_root = f'{MODELS_DIR}/oversold/model_{FORWARD_DAYS}_{BACKWARD_DAYS}_{-DOWN_FILTER:.2f}'
         os.makedirs(model_root, exist_ok=True)
 
@@ -86,11 +65,17 @@ def train_dataset():
         for i in range(times):
             try:
                 now = time.strftime('%Y%m%d%H%M%S', time.localtime())
-                depth = random.choice([6, 7, 8])
+                m_name = random.choice(['resnet_src', 'resnet_optimized', 'simpledense'])
+                depth = random.choice([5, 6, 7, 8])
                 drop_rate = random.choice([0.2, 0.3, 0.4, 0.5])
-                model = get_model(depth=depth, drop_rate=drop_rate)
+                if m_name == 'resnet_src':
+                    model = get_resnet_model_src(input_dim=input_dim, depth=depth, dropout_rate=drop_rate)
+                elif m_name == 'resnet_optimized':
+                    model = get_resnet_model_optimized(input_dim=input_dim, depth=depth, dropout_rate=drop_rate)
+                else:  # simpledense
+                    model = get_simple_dense_model(input_dim=input_dim,  dropout_rate=drop_rate)
                 params = model.count_params()
-                model_name = f'{model_root}/model_{now}_{params}.keras'
+                model_name = f'{model_root}/model_{now}_{params}_{m_name}.keras'
                 callbacks = [
                     keras.callbacks.ModelCheckpoint(filepath=model_name, save_best_only=True, monitor='val_mae', mode='min'),
                     keras.callbacks.EarlyStopping(monitor='val_mae', patience=8, mode='min')
@@ -101,18 +86,18 @@ def train_dataset():
                 model.fit(
                     x_train_valid, y_train_valid, epochs=epoches, batch_size=batch_size, validation_split=validation_split, callbacks=callbacks
                 )
-                # 寻找model.history中最小的val_mae和对应的val_loss和val_mape
+                # 寻找model.history中最小的val_mae和对应的val_loss
                 min_mae = min(model.history.history['val_mae'])
                 min_loss = model.history.history['val_loss'][model.history.history['val_mae'].index(min_mae)]
-                min_mape = model.history.history['val_mape'][model.history.history['val_mae'].index(min_mae)]
                 # 找到model_root下最新的文件，将名称后面加上val_loss和val_mae的最小值
                 files = os.listdir(model_root)
                 files = [f for f in files if f.endswith('.keras')]
                 files.sort(reverse=True)
-                model_name = files[0]
-                if 'mae' not in model_name:  # 如果文件名中没有包含mae，说明还没有重命名过
-                    new_suffix = f'_loss{min_loss:.4f}_mae{min_mae:.4f}_mape{min_mape:.4f}.keras'
-                    new_model_name = model_name.replace('.keras', new_suffix)
-                    os.rename(f'{model_root}/{model_name}', f'{model_root}/{new_model_name}')
+                file_name = files[0]
+                if 'mae' not in file_name:  # 如果文件名中没有包含mae，说明还没有重命名过
+                    new_suffix = f'_loss{min_loss:.4f}_mae{min_mae:.4f}.keras'
+                    new_file_name = file_name.replace('.keras', new_suffix)
+                    os.rename(f'{model_root}/{file_name}', f'{model_root}/{new_file_name}')
             except Exception as e:
+                print(f'Error occurred: {e}')
                 pass

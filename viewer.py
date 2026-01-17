@@ -409,6 +409,10 @@ class MainFrame(wx.Frame):
                 # 添加到布局
                 self.stock_list_sizer.Add(grid, 1, wx.EXPAND|wx.ALL, 0)
                 
+                # 滚动到最后一行（从底部开始显示）
+                if len(df) > 0:
+                    grid.MakeCellVisible(len(df) - 1, 0)
+                
                 # 更新持股数量指标（统计status为holding的行数）
                 if 'status' in df.columns:
                     holding_count = len(df[df['status'].str.lower() == 'holding'])

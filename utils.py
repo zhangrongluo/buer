@@ -169,7 +169,7 @@ def get_realtime_price_DF_from_local_csv(ts_code: str, datalen: int = 15) -> pd.
         df = df.sort_values(by='datetime', ascending=True)  # 升序排列
         return df.tail(datalen).reset_index(drop=True)
     except Exception as e:
-        print(f"读取实时价格数据失败: {e}")
+        print(f"读取{ts_code}实时价格数据失败: {e}")
         return pd.DataFrame(columns=['ts_code', 'datetime', 'close'])
 
 def get_realtime_price_DF_from_tushare(
@@ -853,6 +853,7 @@ def get_stock_list_of_specific_date(
         trade_root = f'{TRADE_DIR}/downgap/max_trade_days_{max_trade_days}'
     hd_csv = f'{trade_root}/holding_list.csv'
     hd_df = pd.read_csv(hd_csv, dtype={'date_in': str, 'date_out': str})
+    hd_df['date_out'] = hd_df['date_out'].str.replace(r'\.0$', '', regex=True)
     hd_df = hd_df[hd_df['date_in'] <= date]
     hd_df = hd_df[(hd_df['date_out'] > date) | (hd_df['date_out'].isnull())]
     columns = ['ts_code', 'stock_name', 'industry', 'date_in', 'date_out', 'amount']
@@ -867,6 +868,7 @@ def get_stock_list_of_specific_date(
             daily_df = daily_df.sort_values(by='trade_date', ascending=True)
             hd_df.loc[hd_df['ts_code'] == code, 'price'] = daily_df.iloc[-1]['close']
     hd_df['value'] = hd_df['amount'] * hd_df['price']
+    hd_df = hd_df.reset_index(drop=True)
     return hd_df
 
 def calculate_profit_of_specific_date(
@@ -1226,7 +1228,18 @@ def plot_portfolio_earning_charts(
     ax2.legend()
     # 填充曲线至横轴之间的区域
     ax1.fill_between(profit_df['trade_date'], profit_df['delta'].cumsum(), color='lightblue', alpha=0.25)
-    # ax2.fill_between(indicator_df['trade_date'], indicator_df['cumulative_return'], color='lightgreen', alpha=0.25)
+    if index_code is None:
+        ax2.fill_between(indicator_df['trade_date'], indicator_df['cumulative_return'], color='lightgreen', alpha=0.25)
+    else:
+        # 填充策略和基准指数的区域
+        ax2.fill_between(indicator_df['trade_date'], indicator_df['cumulative_return'], 
+                         indicator_df['index_return'], 
+                         where=(indicator_df['cumulative_return'] >= indicator_df['index_return']),
+                         facecolor='lightgreen', alpha=0.25, interpolate=True, label='策略优于基准')
+        ax2.fill_between(indicator_df['trade_date'], indicator_df['cumulative_return'], 
+                         indicator_df['index_return'], 
+                         where=(indicator_df['cumulative_return'] < indicator_df['index_return']),
+                         facecolor='lightcoral', alpha=0.25, interpolate=True, label='策略劣于基准')
     # 标记最大值
     max_profit = profit_df['delta'].cumsum().max()
     max_profit_date = profit_df.loc[profit_df['delta'].cumsum().idxmax()]['trade_date']
@@ -1275,6 +1288,7 @@ def plot_portfolio_earning_charts(
             统计天数: {total_days:>20,}天
             夏普比率: {sharpe_ratio:>22,.4f}
             Omega比率: {omega_ratio:>22,.4f}
+            期间收益率: {total_return:>20,.2%}
             年化收益率: {annualized_return:>20,.2%}
             最大回撤率: {mdd:>21,.2%}
             成交股票胜率: {win_rate_stocks/100:>20,.2%}

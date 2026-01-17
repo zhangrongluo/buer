@@ -1,5 +1,4 @@
 import os
-from tensorflow.keras import layers  # type: ignore
 import pandas as pd  # type: ignore
 from tensorflow import keras  
 from cons_general import TEMP_DIR, PREDICT_DIR, MODELS_DIR
@@ -90,7 +89,7 @@ def predict_dataset():
             model = keras.models.load_model(model)
             pred = model.predict(x_test)
             y_test_pred_list.append(pred)
-            del model
+            # del model
         y_test_pred = sum(y_test_pred_list) / len(y_test_pred_list)
         diff = pd.DataFrame({'real': y_test, 'pred': y_test_pred.flatten()})
         diff['code'] = df_origin.iloc[-test_length:]['code'].values
@@ -124,7 +123,7 @@ def predict_dataset():
             model = keras.models.load_model(model_name)
             pred = model.predict(x_trade)
             y_trade_pred.append(pred)
-            del model
+            # del model
         # average the y_trade_pred
         y_trade_pred = sum(y_trade_pred) / len(y_trade_pred)
 

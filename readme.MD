@@ -8,6 +8,7 @@ python auto_jobs_downgap.py
 python auto_jobs_oversold.py
 ```
 - 分步查看运行过程，可以单独运行notebook文件（dataset_\*.ipynb、model_\*.ipynb、predict_\*.ipynb和trade_\*.ipynb）。
+- 分步手动模式只在本地运行,文件未上传至GitHub。
 
 #### 必要的配置:
 - Tushare pro 账号10000积分和实时价格查询权限。如没有实时权限，则局部功能会受限。
