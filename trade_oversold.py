@@ -15,7 +15,7 @@ from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FU
                             HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN, exception_list, dataset_to_predict_trade)
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, TEST_DIR, PREDICT_DIR
 from cons_hidden import bark_device_key
-from utils import (send_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, 
+from utils import (send_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, calculate_today_series_statistic_indicator,
                    get_up_down_limit, early_sell_standard_oversold_v2, is_rising_or_not, is_decreasing_or_not, 
                    is_suspended_or_not, get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data)
 
@@ -700,6 +700,7 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         scan_buy_in_list()
         scan_holding_list()
         create_daily_profit_list()
+        calculate_today_series_statistic_indicator(name='oversold')
         if mode == 'test':
             refresh_holding_list()
 

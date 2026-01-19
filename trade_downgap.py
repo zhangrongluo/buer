@@ -12,7 +12,8 @@ from cons_downgap import dataset_group_cons
 from cons_hidden import bark_device_key
 from utils import (send_message_via_bark, get_stock_realtime_price, calculate_days_from_tradedate_to_filldate, 
                    is_trade_date_or_not, get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not,
-                   get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, early_sell_standard_downgap)
+                   get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, early_sell_standard_downgap, 
+                   calculate_today_series_statistic_indicator)
 from stocklist import get_name_and_industry_by_code
 
 daily_root = f'{BASICDATA_DIR}/dailydata'
@@ -904,6 +905,7 @@ def trade_process(max_trade_days: int, mode: Literal['trade', 'test'] = 'trade')
         scan_buy_in_list(max_trade_days=max_trade_days)
         scan_holding_list(max_trade_days=max_trade_days)
         create_daily_profit_list(max_trade_days=max_trade_days)
+        calculate_today_series_statistic_indicator(name='downgap', max_trade_days=max_trade_days)
         if mode == 'test':
             refresh_holding_list(max_trade_days=max_trade_days)
 

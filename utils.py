@@ -943,13 +943,14 @@ def calculate_today_series_statistic_indicator(
         name: Literal['oversold', 'downgap'], **kwargs
 ):
     """
-    ### 计算今天的系列统计指标
+    ### 计算更新保存今天的系列统计指标
     #### :param name: 策略名称, oversold or downgap
     #### :param kwargs: name参数为 downgap 时, 需要 max_trade_days 参数
     #### NOTE:
-    - 'win_rate': Win rate of the strategy(1、5、10、20、30 days)
-    - 'omega_ratio': Omega ratio of the strategy
-    - 'return_ratio': Return ratio of the strategy
+    - 'win_rate': 以天数统计的胜率(1、5、10、20、30 天)
+    - 'omega_ratio': Omega 比率
+    - 'return_ratio': 收益率=今日盈利/总持仓市值
+    - 'win_rate_stocks': 以卖出股票统计的胜率
     """
     if not is_trade_date_or_not():
         return
@@ -990,11 +991,21 @@ def calculate_today_series_statistic_indicator(
         'return_ratio': round(return_ratio, 4),
         'win_rate_stocks': round(win_rate_stocks, 4)
     }
-    df = pd.DataFrame([data])
+    df_new = pd.DataFrame([data])
     if not os.path.exists(indicator_csv):
-        df.to_csv(indicator_csv, index=False)
+        df_new.to_csv(indicator_csv, index=False)
+        return
+    indicator_df = pd.read_csv(indicator_csv, dtype={'trade_date': str})
+    if today not in indicator_df['trade_date'].values:
+        indicator_df = pd.concat([indicator_df, df_new], ignore_index=True)
     else:
-        df.to_csv(indicator_csv, mode='a', header=False, index=False)
+        indicator_df = indicator_df.set_index('trade_date')
+        df_new = df_new.set_index('trade_date')
+        indicator_df.update(df_new)
+        indicator_df = indicator_df.reset_index()
+    indicator_df = indicator_df.sort_values(by='trade_date', ascending=True)
+    indicator_df = indicator_df.reset_index(drop=True)
+    indicator_df.to_csv(indicator_csv, index=False)
 
 def calculate_information_ratio(
         name: Literal['oversold', 'downgap'], start=None, end=None, **kwargs
