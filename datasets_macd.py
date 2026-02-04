@@ -67,7 +67,7 @@ def get_macd_dataset(ts_code: str, k_lines: int = 3, backward_days: int = 5) -> 
             # 添加 gold_date 和 days 字段，表示 trade_date 和距离第一个金叉的天数
             row['gold_date'] = factor_dict[gold_cross_index]['trade_date']
             row['days'] = days_between 
-            # 计算添加 index 之前12天(含index)的macd 的均值
+            # 计算添加 index 之前12天(含index)的macd 的均值 TODO: 没有意义的指标?
             macd_values = [factor_dict[j]['macd'] for j in range(max(0, index - 12), index + 1)]
             if not macd_values:
                 continue

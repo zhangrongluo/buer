@@ -169,7 +169,7 @@ def get_realtime_price_DF_from_local_csv(ts_code: str, datalen: int = 15) -> pd.
         df = df.sort_values(by='datetime', ascending=True)  # 升序排列
         return df.tail(datalen).reset_index(drop=True)
     except Exception as e:
-        print(f"读取{ts_code}实时价格数据失败: {e}")
+        print(f"从本地实时价格csv文件读取{ts_code}实时价格数据失败: {e}")
         return pd.DataFrame(columns=['ts_code', 'datetime', 'close'])
 
 def get_realtime_price_DF_from_tushare(
@@ -192,7 +192,7 @@ def get_realtime_price_DF_from_tushare(
         df = pro.rt_min_daily(ts_code=ts_code, freq=freq).tail(datalen)
         return df
     except Exception as e:
-        print(f"从 tushare获取数据出错: {e}")
+        print(f"从tushare获取{ts_code}实时价格数据出错: {e}")
         return pd.DataFrame(columns=['code', 'freq', 'time', 'open', 'high', 'low', 'close', 'vol', 'amount'])
 
 def get_realtime_price_DF_from_sina(code, scale=1, datalen=15) -> pd.DataFrame:
