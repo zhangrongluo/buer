@@ -17,12 +17,12 @@ dataset_group_cons = {
         'EXTRA_DAYS_RATE': 0.03,  # 额外交易天数收益率内股票收益率如果超过该值就卖出
         'SHUFFLE': False,  # 是否打乱测试集
         'STOP_BUYING': False,  # 是否停止买入新股票, True表示停止买入新股票, 默认False
-        'MAX_STOCKS': 65,  # 最大持仓股票数
+        'MAX_STOCKS': 66,  # 最大持仓股票数
         'ONE_TIME_FUNDS': 60000,  # 单次买入资金
         'MAX_DOWN_LIMIT': -0.225,  # 最大允许下跌幅度-22.5%
         'PRED_MODELS': 6,  # 预测交易集的模型数
-        'train_times': 24,  # 训练次数
-        'initial_funds': 6e6,  # 初始资金600万
+        'TRAIN_TIMES': 24,  # 训练次数
+        'INITIAL_FUNDS': 6e6,  # 初始资金600万
         'BUY_IN_LIST': os.path.join(trade_root, f'max_trade_days_50', 'buy_in_list.csv'),
         'HOLDING_LIST': os.path.join(trade_root, f'max_trade_days_50', 'holding_list.csv'),
         'DAILY_PROFIT': os.path.join(trade_root, f'max_trade_days_50', 'daily_profit.csv'),
@@ -49,8 +49,8 @@ dataset_group_cons = {
         'ONE_TIME_FUNDS': 60000,
         'MAX_DOWN_LIMIT': -0.225,
         'PRED_MODELS': 6,
-        'train_times': 24,  # 训练次数
-        'initial_funds': 6e6,
+        'TRAIN_TIMES': 24,  # 训练次数
+        'INITIAL_FUNDS': 6e6,
         'BUY_IN_LIST': os.path.join(trade_root, f'max_trade_days_45', 'buy_in_list.csv'),
         'HOLDING_LIST': os.path.join(trade_root, f'max_trade_days_45', 'holding_list.csv'),
         'DAILY_PROFIT': os.path.join(trade_root, f'max_trade_days_45', 'daily_profit.csv'),
@@ -77,8 +77,8 @@ dataset_group_cons = {
         'ONE_TIME_FUNDS': 60000,
         'MAX_DOWN_LIMIT': -0.225,
         'PRED_MODELS': 6,
-        'train_times': 24,  # 训练次数
-        'initial_funds': 6e6,
+        'TRAIN_TIMES': 24,  # 训练次数
+        'INITIAL_FUNDS': 6e6,
         'BUY_IN_LIST': os.path.join(trade_root, f'max_trade_days_60', 'buy_in_list.csv'),
         'HOLDING_LIST': os.path.join(trade_root, f'max_trade_days_60', 'holding_list.csv'),
         'DAILY_PROFIT': os.path.join(trade_root, f'max_trade_days_60', 'daily_profit.csv'),
@@ -94,8 +94,8 @@ dataset_group_cons = {
         'COST_FEE': 0.0003,
         'MIN_STOCK_PRICE': 2.88,
         'PAUSE': 0.5,
-        'additionl_rate': 0.02,
-        'exception_list': ['退市', '退', 'PT', 'ST'],
+        'ADDITIONAL_RATE': 0.02,
+        'EXCEPTION_LIST': ['退市', '退', 'PT', 'ST'],
         'MAX_TRADE_DAYS_LIST': [50, 45, 60],  # 最大交易天数列表
     }
 }

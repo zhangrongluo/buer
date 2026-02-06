@@ -320,7 +320,7 @@ def create_holding_list(max_trade_days: int):
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
             HOLDING_LIST = dataset_group_cons[group].get('HOLDING_LIST')
-            initial_funds = dataset_group_cons[group].get('initial_funds')
+            initial_funds = dataset_group_cons[group].get('INITIAL_FUNDS')
             break
     columns = [
         'ts_code', 'stock_name', 'industry', 'trade_date', 'fill_date', 'date_in', 'date_out', 'days', 
@@ -338,7 +338,7 @@ def scan_buy_in_list(max_trade_days:int):
     #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
     """
     MIN_STOCK_PRICE = dataset_group_cons['common'].get('MIN_STOCK_PRICE')
-    additionl_rate = dataset_group_cons['common'].get('additionl_rate')
+    additional_rate = dataset_group_cons['common'].get('ADDITIONAL_RATE')
     for group in dataset_group_cons:
         if str(int(max_trade_days)) in group:
             BUY_IN_LIST = dataset_group_cons[group].get('BUY_IN_LIST')
@@ -517,7 +517,7 @@ def scan_buy_in_list(max_trade_days:int):
                 pct = 0.95
                 pred_2_down_limit = 1/(1-up_limit_rate*pct)**2 -1  # 连续 2 个跌停后回补的最低收益率
                 if pct_chg <= -up_limit_rate * pct and pred >= pred_2_down_limit:
-                    if pred_now < pred + additionl_rate:
+                    if pred_now < pred + additional_rate:
                         return
                 amount = calculate_buy_in_amount(funds=buy_in_amount, price=price_now)
         if amount == 0:
@@ -938,7 +938,7 @@ def build_buy_in_list():
         MIN_PRED_RATE = dataset_group_cons[group].get('MIN_PRED_RATE')
         PRED_RATE_PCT = dataset_group_cons[group].get('PRED_RATE_PCT')
         BUY_IN_LIST_ORIGIN = dataset_group_cons[group].get('BUY_IN_LIST_ORIGIN')
-        exception_list = dataset_group_cons['common'].get('exception_list')
+        exception_list = dataset_group_cons['common'].get('EXCEPTION_LIST')
         model_name_1 = dataset_group_cons[group].get('MODEL_NAME')
         if MAX_TRADE_DAYS is None:
             continue

@@ -4,14 +4,14 @@ import random
 import pandas as pd  # type: ignore
 from tensorflow import keras  
 from cons_general import TEMP_DIR, MODELS_DIR
-from cons_oversold import dataset_to_train, TEST_DATASET_PERCENT
+from cons_oversold import DATASET_TO_TRAIN, TEST_DATASET_PERCENT
 from models import get_resnet_model_src, get_resnet_model_optimized, get_simple_dense_model
 
 def train_dataset():
     """
     ### 训练数据集
     """
-    for dataset in dataset_to_train:
+    for dataset in DATASET_TO_TRAIN:
         FORWARD_DAYS = dataset['FORWARD_DAYS']
         BACKWARD_DAYS = dataset['BACKWARD_DAYS']
         DOWN_FILTER = dataset['DOWN_FILTER']

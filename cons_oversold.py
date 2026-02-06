@@ -16,8 +16,8 @@ MIN_STOCK_PRICE = 2.88 # 最低股票买入价格，低于此价格不买入
 MAX_DOWN_LIMIT = -0.18 # 最大下跌幅度，超过此值要卖出
 MAX_BUY_UP_RATE = 0.03 # 买入价超过buy_point_base的最大幅度
 PAUSE = 0.5  # 暂停时间
-initial_funds = 3.6e6  # 初始资金360万
-exception_list = ['退市', '退', 'PT', 'ST']  # 例外股票列表,不列入买入清单
+INITIAL_FUNDS = 3.6e6  # 初始资金360万
+EXCEPTION_LIST = ['退市', '退', 'PT', 'ST']  # 例外股票列表,不列入买入清单
 
 # files
 from cons_general import TRADE_DIR
@@ -27,27 +27,25 @@ DAILY_PROFIT = f'{TRADE_DIR}/oversold/daily_profit.csv'  # 每日盈亏
 FUNDS_LIST = f'{TRADE_DIR}/oversold/funds_change_list.csv'  # 资金清单
 TRADE_LOG = f'{TRADE_DIR}/oversold/trade.log'  # 交易日志
 INDICATOR_CSV = f'{TRADE_DIR}/oversold/indicator.csv'  # 指标数据
-XD_RECORD_HOLDGING_CSV = f'{TRADE_DIR}/oversold/xd_record_holding.csv'  # 盘中前复权和股数调整记录
-XD_RECORD_BUY_IN_CSV = f'{TRADE_DIR}/oversold/xd_record_buy_in.csv'  # 盘中前复权记录
 BUY_IN_LIST_ORIGIN = f'{TRADE_DIR}/oversold/buy_in_list_origin.csv'  # 原始买入清单
 HOLDING_LIST_ORIGIN = f'{TRADE_DIR}/oversold/holding_list_origin.csv'  # 原始持仓清单
 
 # TO_UPDATE == False, SKIP updating dataset
-dataset_to_update = [
+DATASET_TO_UPDATE = [
     {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.45, 'TO_UPDATE': True},
     {'FORWARD_DAYS': 200, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.50, 'TO_UPDATE': True},
     {'FORWARD_DAYS': 225, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.55, 'TO_UPDATE': True},
 ]
 
 # TIMES == 0, SKIP training dataset
-dataset_to_train = [
+DATASET_TO_TRAIN = [
     {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.45, 'TIMES': 18},
     {'FORWARD_DAYS': 200, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.50, 'TIMES': 18},
     {'FORWARD_DAYS': 225, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.55, 'TIMES': 18},
 ]
 
 # PRED_MODELS == 0, SKIP predicting dataset
-dataset_to_predict_trade = [
+DATASET_TO_PREDICT_TRADE = [
     {'FORWARD_DAYS': 150, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.45, 'PRED_MODELS': 8},
     {'FORWARD_DAYS': 200, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.50, 'PRED_MODELS': 8},
     {'FORWARD_DAYS': 225, 'BACKWARD_DAYS': 130, 'DOWN_FILTER': -0.55, 'PRED_MODELS': 8},

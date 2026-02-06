@@ -8,7 +8,7 @@ import datetime
 from concurrent.futures import ThreadPoolExecutor
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info
 from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR, TRADE_CAL_CSV
-from cons_oversold import dataset_to_update
+from cons_oversold import DATASET_TO_UPDATE
 from utils import get_qfq_price_DF_by_adj_factor
 
 def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
@@ -335,7 +335,7 @@ def update_dataset():
     last_cal_date = trade_cal.iloc[0]['cal_date']
     print('最新交易日期:', last_cal_date)
 
-    for param in dataset_to_update:
+    for param in DATASET_TO_UPDATE:
         FORWARD_DAYS = param['FORWARD_DAYS']
         BACKWARD_DAYS = param['BACKWARD_DAYS']
         DOWN_FILTER = param['DOWN_FILTER']

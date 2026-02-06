@@ -21,7 +21,7 @@ def train_dataset():
         TEST_DATASET_PERCENT = dataset_group_cons[group].get('TEST_DATASET_PERCENT')
         TRADE_COVERAGE_DAYS = dataset_group_cons[group].get('TRADE_COVERAGE_DAYS')
         SHUFFLE = dataset_group_cons[group].get('SHUFFLE')
-        train_times = dataset_group_cons[group].get('train_times')
+        train_times = dataset_group_cons[group].get('TRAIN_TIMES')
         model_name_1 = dataset_group_cons[group].get('MODEL_NAME')
         if MAX_TRADE_DAYS is None or train_times == 0:
             continue

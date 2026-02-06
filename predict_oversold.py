@@ -2,13 +2,13 @@ import os
 import pandas as pd  # type: ignore
 from tensorflow import keras  
 from cons_general import TEMP_DIR, PREDICT_DIR, MODELS_DIR
-from cons_oversold import dataset_to_predict_trade,  MIN_PRED_RATE, TEST_DATASET_PERCENT
+from cons_oversold import DATASET_TO_PREDICT_TRADE,  MIN_PRED_RATE, TEST_DATASET_PERCENT
 
 def predict_dataset():
     """
     ### 预测交易数据集
     """
-    for dataset in dataset_to_predict_trade:
+    for dataset in DATASET_TO_PREDICT_TRADE:
         FORWARD_DAYS = dataset['FORWARD_DAYS']
         BACKWARD_DAYS = dataset['BACKWARD_DAYS']
         DOWN_FILTER = dataset['DOWN_FILTER']

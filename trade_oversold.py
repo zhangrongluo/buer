@@ -8,11 +8,11 @@ from typing import Literal
 from threading import Lock
 from stocklist import get_name_and_industry_by_code
 from concurrent.futures import ThreadPoolExecutor
-from cons_oversold import (initial_funds, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, STOP_BUYING,
+from cons_oversold import (INITIAL_FUNDS, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, STOP_BUYING,
                            PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
                            REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST, MAX_BUY_UP_RATE,
-                            DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, XD_RECORD_HOLDGING_CSV, XD_RECORD_BUY_IN_CSV,
-                            HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN, exception_list, dataset_to_predict_trade)
+                            DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN, EXCEPTION_LIST, 
+                            DATASET_TO_PREDICT_TRADE)
 from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, TEST_DIR, PREDICT_DIR
 from cons_hidden import bark_device_key
 from utils import (send_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, calculate_today_series_statistic_indicator,
@@ -250,7 +250,7 @@ def create_or_update_funds_change_list(funds: float, note: str) -> bool:
     new_row.to_csv(FUNDS_LIST, mode='a', header=False, index=False)
     return True
 
-def create_holding_list(initial_cash: float = initial_funds):
+def create_holding_list(initial_cash: float = INITIAL_FUNDS):
     """
     ### 创建持仓列表
     #### :param max_trade_days: 最大交易天数, 用于区别数据集, 50, 45, 60.
@@ -729,7 +729,7 @@ def build_buy_in_list():
     ### 构建买入清单 buy_in_list.csv
     """
     print('creating and saving sub buy_in_list csv files...')
-    for dataset in dataset_to_predict_trade:
+    for dataset in DATASET_TO_PREDICT_TRADE:
         FORWARD_DAYS = dataset['FORWARD_DAYS']
         BACKWARD_DAYS = dataset['BACKWARD_DAYS']
         DOWN_FILTER = dataset['DOWN_FILTER']
@@ -773,7 +773,7 @@ def build_buy_in_list():
 
         # filter trade_df
         trade_df = trade_df[trade_df['pred'] > MIN_PRED_RATE]
-        trade_df = trade_df[~trade_df['name'].str.contains('|'.join(exception_list))]
+        trade_df = trade_df[~trade_df['name'].str.contains('|'.join(EXCEPTION_LIST))]
         trade_df = trade_df.reset_index(drop=True)
         # save trade_df to csv
         trade_dir = f'{TRADE_DIR}/oversold'
@@ -784,7 +784,7 @@ def build_buy_in_list():
     trade_dir = f'{TRADE_DIR}/oversold'
     os.makedirs(trade_dir, exist_ok=True)
     all_df = pd.DataFrame()
-    for dataset in dataset_to_predict_trade:
+    for dataset in DATASET_TO_PREDICT_TRADE:
         FORWARD_DAYS = dataset['FORWARD_DAYS']
         BACKWARD_DAYS = dataset['BACKWARD_DAYS']
         DOWN_FILTER = dataset['DOWN_FILTER']
