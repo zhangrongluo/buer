@@ -3,9 +3,17 @@ import time # type: ignore
 import random
 import pandas as pd  # type: ignore
 from tensorflow import keras  
-from cons_general import TEMP_DIR, MODELS_DIR
-from cons_oversold import DATASET_TO_TRAIN, TEST_DATASET_PERCENT
 from models import get_resnet_model_src, get_resnet_model_optimized, get_simple_dense_model
+from cons_hidden import load_config, CONS_GENERAL_TOML, CONS_OVERSOLD_TOML
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+TEMP_DIR = general_config['TEMP_DIR']
+MODELS_DIR = general_config['MODELS_DIR']
+# 加载Oversold配置
+oversold_config = load_config(CONS_OVERSOLD_TOML)
+DATASET_TO_TRAIN = oversold_config['DATASET_TO_TRAIN']
+TEST_DATASET_PERCENT = oversold_config['TEST_DATASET_PERCENT']
 
 def train_dataset():
     """

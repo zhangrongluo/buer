@@ -1,8 +1,19 @@
 import os
 import pandas as pd  # type: ignore
 from tensorflow import keras  
-from cons_general import TEMP_DIR, PREDICT_DIR, MODELS_DIR
-from cons_oversold import DATASET_TO_PREDICT_TRADE,  MIN_PRED_RATE, TEST_DATASET_PERCENT
+from cons_hidden import load_config, CONS_GENERAL_TOML, CONS_OVERSOLD_TOML
+
+# 加载通用配置
+general_cfg = load_config(CONS_GENERAL_TOML)
+TEMP_DIR = general_cfg['TEMP_DIR']
+PREDICT_DIR = general_cfg['PREDICT_DIR']
+MODELS_DIR = general_cfg['MODELS_DIR']
+# 加载Oversold配置
+oversold_cfg = load_config(CONS_OVERSOLD_TOML)
+DATASET_TO_PREDICT_TRADE = oversold_cfg['DATASET_TO_PREDICT_TRADE']
+MIN_PRED_RATE = oversold_cfg['MIN_PRED_RATE']
+TEST_DATASET_PERCENT = oversold_cfg['TEST_DATASET_PERCENT']
+
 
 def predict_dataset():
     """

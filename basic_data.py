@@ -13,10 +13,14 @@ from io import StringIO
 from DrissionPage import ChromiumOptions, Chromium
 from concurrent.futures import ThreadPoolExecutor
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info, pro
-from cons_general import BASICDATA_DIR, FINANDATA_DIR
-
+from cons_hidden import load_config, CONS_GENERAL_TOML
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)  # pandas concat warning
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+BASICDATA_DIR = general_config['BASICDATA_DIR']
+FINANDATA_DIR = general_config['FINANDATA_DIR']
 
 all_stocks_info = get_all_stocks_info()
 

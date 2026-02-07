@@ -6,12 +6,21 @@ import datetime
 import pandas as pd
 from apscheduler.schedulers.background import BackgroundScheduler
 from trade_downgap import trade_process, XD_buy_in_list, XD_holding_list, build_buy_in_list
-from cons_general import TRADE_CAL_CSV, TRADE_DIR, BACKUP_DIR
-from cons_downgap import MODEL_NAME, dataset_group_cons
 from utils import calculate_today_series_statistic_indicator
 from datasets_downgap import update_dataset
 from model_downgap import train_dataset
 from predict_downgap import predict_dataset
+from cons_hidden import load_config, CONS_GENERAL_TOML, CONS_DOWNGAP_TOML
+
+# 加载配置
+general_config = load_config(CONS_GENERAL_TOML)
+TRADE_CAL_CSV = general_config['TRADE_CAL_CSV']
+TRADE_DIR = general_config['TRADE_DIR']
+BACKUP_DIR = general_config['BACKUP_DIR']
+# 加载downgap模型配置
+downgap_config = load_config(CONS_DOWNGAP_TOML)
+MODEL_NAME = downgap_config['MODEL_NAME']
+dataset_group_cons = downgap_config['dataset_group_cons']
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)

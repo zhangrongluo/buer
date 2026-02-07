@@ -14,11 +14,18 @@ from io import StringIO
 from DrissionPage import ChromiumOptions, Chromium
 from concurrent.futures import ThreadPoolExecutor
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info, pro
-from cons_general import (BASICDATA_DIR, FINANDATA_DIR, DAILY_DATA_TEMP_CSV, DAILY_INDICATOR_TEMP_CSV, 
-                          DAILY_ADJFACTOR_TEMP_CSV, DAILY_QUANT_FACTOR_TEMP_CSV)
-
+from cons_hidden import load_config, CONS_GENERAL_TOML
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)  # pandas concat warning
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+BASICDATA_DIR = general_config['BASICDATA_DIR']
+FINANDATA_DIR = general_config['FINANDATA_DIR']
+DAILY_DATA_TEMP_CSV = general_config['DAILY_DATA_TEMP_CSV']
+DAILY_INDICATOR_TEMP_CSV = general_config['DAILY_INDICATOR_TEMP_CSV']
+DAILY_ADJFACTOR_TEMP_CSV = general_config['DAILY_ADJFACTOR_TEMP_CSV']
+DAILY_QUANT_FACTOR_TEMP_CSV = general_config['DAILY_QUANT_FACTOR_TEMP_CSV']
 
 all_stocks_info = get_all_stocks_info()
 

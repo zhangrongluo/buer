@@ -2,7 +2,11 @@ import wx
 import pandas as pd
 import os
 from utils import  calculate_sharpe_ratio
-from cons_general import RISK_FREE_RATE
+from cons_hidden import load_config, CONS_GENERAL_TOML
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+RISK_FREE_RATE = general_config['RISK_FREE_RATE']
 
 oversold_hd_csv = 'trade/oversold/holding_list.csv'
 oversold_indicator_csv = 'trade/oversold/statistic_indicator.csv'

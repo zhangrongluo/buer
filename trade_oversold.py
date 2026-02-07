@@ -8,16 +8,45 @@ from typing import Literal
 from threading import Lock
 from stocklist import get_name_and_industry_by_code
 from concurrent.futures import ThreadPoolExecutor
-from cons_oversold import (INITIAL_FUNDS, COST_FEE, MIN_STOCK_PRICE, ONE_TIME_FUNDS, MAX_STOCKS, STOP_BUYING,
-                           PRED_RATE_PCT, MIN_PRED_RATE, MIN_WAITING_DAYS, MAX_TRADE_DAYS, MAX_DOWN_LIMIT,
-                           REST_TRADE_DAYS, WAITING_RATE_PCT, MODEL_NAME, BUY_IN_LIST, HOLDING_LIST, MAX_BUY_UP_RATE,
-                            DAILY_PROFIT, FUNDS_LIST, TRADE_LOG, HOLDING_LIST_ORIGIN, BUY_IN_LIST_ORIGIN, EXCEPTION_LIST, 
-                            DATASET_TO_PREDICT_TRADE)
-from cons_general import BACKUP_DIR, TRADE_DIR, BASICDATA_DIR, TEST_DIR, PREDICT_DIR
-from cons_hidden import bark_device_key
+from cons_hidden import bark_device_key, load_config, CONS_GENERAL_TOML, CONS_OVERSOLD_TOML
 from utils import (send_message_via_bark, get_stock_realtime_price, is_trade_date_or_not, calculate_today_series_statistic_indicator,
                    get_up_down_limit, early_sell_standard_oversold_v2, is_rising_or_not, is_decreasing_or_not, 
                    is_suspended_or_not, get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data)
+
+# 加载通用配置
+general_cfg = load_config(CONS_GENERAL_TOML)
+BACKUP_DIR = general_cfg['BACKUP_DIR']
+TRADE_DIR = general_cfg['TRADE_DIR']
+BASICDATA_DIR = general_cfg['BASICDATA_DIR']
+TEST_DIR = general_cfg['TEST_DIR']
+TRADE_CAL_CSV = general_cfg['TRADE_CAL_CSV']
+PREDICT_DIR = general_cfg['PREDICT_DIR']
+# 加载Oversold配置
+oversold_cfg = load_config(CONS_OVERSOLD_TOML)
+INITIAL_FUNDS = oversold_cfg['INITIAL_FUNDS']
+COST_FEE = oversold_cfg['COST_FEE']
+MIN_STOCK_PRICE = oversold_cfg['MIN_STOCK_PRICE']
+ONE_TIME_FUNDS = oversold_cfg['ONE_TIME_FUNDS']
+MAX_STOCKS = oversold_cfg['MAX_STOCKS']
+STOP_BUYING = oversold_cfg['STOP_BUYING']
+PRED_RATE_PCT = oversold_cfg['PRED_RATE_PCT']
+MIN_PRED_RATE = oversold_cfg['MIN_PRED_RATE']
+MIN_WAITING_DAYS = oversold_cfg['MIN_WAITING_DAYS']
+MAX_TRADE_DAYS = oversold_cfg['MAX_TRADE_DAYS']
+MAX_DOWN_LIMIT = oversold_cfg['MAX_DOWN_LIMIT']
+REST_TRADE_DAYS = oversold_cfg['REST_TRADE_DAYS']
+WAITING_RATE_PCT = oversold_cfg['WAITING_RATE_PCT']
+MODEL_NAME = oversold_cfg['MODEL_NAME']
+BUY_IN_LIST = oversold_cfg['BUY_IN_LIST']
+HOLDING_LIST = oversold_cfg['HOLDING_LIST']
+MAX_BUY_UP_RATE = oversold_cfg['MAX_BUY_UP_RATE']
+DAILY_PROFIT = oversold_cfg['DAILY_PROFIT']
+FUNDS_LIST = oversold_cfg['FUNDS_LIST']
+TRADE_LOG = oversold_cfg['TRADE_LOG']
+HOLDING_LIST_ORIGIN = oversold_cfg['HOLDING_LIST_ORIGIN']
+BUY_IN_LIST_ORIGIN = oversold_cfg['BUY_IN_LIST_ORIGIN']
+EXCEPTION_LIST = oversold_cfg['EXCEPTION_LIST']
+DATASET_TO_PREDICT_TRADE = oversold_cfg['DATASET_TO_PREDICT_TRADE']
 
 backup_dir = f'{BACKUP_DIR}/oversold'
 os.makedirs(backup_dir, exist_ok=True)
@@ -686,6 +715,12 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         print(f'Invalid mode: {mode}. Use "trade" or "test".')
         return
     
+    def is_within_trade_date():
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        cal_df = pd.read_csv(TRADE_CAL_CSV, dtype={'cal_date': str})
+        cal_df = cal_df[cal_df['is_open'] == 1]
+        return today in cal_df['cal_date'].values
+
     def is_within_trading_hours():
         now = datetime.datetime.now().time()
         am_begin = datetime.time(9, 30)
@@ -704,10 +739,10 @@ def trade_process(mode: Literal['trade', 'test'] = 'trade'):
         if mode == 'test':
             refresh_holding_list()
 
-    if mode == 'trade' and is_within_trading_hours():
+    if mode == 'trade' and is_within_trading_hours() and is_within_trade_date():
         # 在实际交易时间内执行交易逻辑
         one_trade_loop()
-    if mode == 'test' and not is_within_trading_hours():
+    if mode == 'test' and (not is_within_trading_hours() or not is_within_trade_date()):
         # 在非交易时间测试交易逻辑
         import shutil
         shutil.copytree(trade_dir, f'{trade_dir}_copy', dirs_exist_ok=True)

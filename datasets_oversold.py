@@ -7,9 +7,18 @@ import pandas as pd
 import datetime
 from concurrent.futures import ThreadPoolExecutor
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info
-from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR, TRADE_CAL_CSV
-from cons_oversold import DATASET_TO_UPDATE
 from utils import get_qfq_price_DF_by_adj_factor
+from cons_hidden import load_config, CONS_GENERAL_TOML, CONS_OVERSOLD_TOML
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+BASICDATA_DIR = general_config['BASICDATA_DIR']
+DATASETS_DIR = general_config['DATASETS_DIR']
+TEMP_DIR = general_config['TEMP_DIR']
+TRADE_CAL_CSV = general_config['TRADE_CAL_CSV']
+# 加载oversold配置
+oversold_config = load_config(CONS_OVERSOLD_TOML)
+DATASET_TO_UPDATE = oversold_config['DATASET_TO_UPDATE']
 
 def calculate_RSI_indicator(df: pd.DataFrame, period: int = 14):
     """

@@ -14,3 +14,8 @@ python auto_jobs_oversold.py
 - Tushare pro 账号10000积分和实时价格查询权限。如没有实时权限，则局部功能会受限。
 - Bark APP device key。没有 Bark 推送权限，无法收到交易提醒。
 - Pushover app token 和 user key 非必需。
+- 需要在系统环境变量中设置以下变量：
+  - TUSHARE_TOKEN：Tushare pro 的 token。
+  - BARK_DEVICE_KEY：Bark APP 的 device key。
+  - PUSHOVER_APP_TOKEN：Pushover app 的 token（非必需）。
+  - PUSHOVER_USER_KEY：Pushover app 的 user key（非必需）。

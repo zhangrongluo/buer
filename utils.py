@@ -9,11 +9,25 @@ import tushare as ts
 from typing import Literal
 from DrissionPage import ChromiumOptions, Chromium
 from basic_data_alt_edition import download_dividend_data_in_multi_ways
-from cons_general import (TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, BASICDATA_DIR, TRADE_DIR, SUSPEND_STOCK_CSV, 
-                          TEMP_DIR, DAILY_ADJFACTOR_TEMP_CSV, DATASETS_DIR, RISK_FREE_RATE)
-from cons_oversold import PAUSE
-from cons_downgap import dataset_group_cons
+from cons_hidden import load_config, CONS_GENERAL_TOML, CONS_DOWNGAP_TOML, CONS_OVERSOLD_TOML
 
+# 加载通用配置
+general_cfg = load_config(CONS_GENERAL_TOML)
+TRADE_CAL_CSV = general_cfg['TRADE_CAL_CSV']
+UP_DOWN_LIMIT_CSV = general_cfg['UP_DOWN_LIMIT_CSV']
+BASICDATA_DIR = general_cfg['BASICDATA_DIR']
+TRADE_DIR = general_cfg['TRADE_DIR']
+SUSPEND_STOCK_CSV = general_cfg['SUSPEND_STOCK_CSV']
+TEMP_DIR = general_cfg['TEMP_DIR']
+DAILY_ADJFACTOR_TEMP_CSV = general_cfg['DAILY_ADJFACTOR_TEMP_CSV']
+DATASETS_DIR = general_cfg['DATASETS_DIR']
+RISK_FREE_RATE = general_cfg['RISK_FREE_RATE']
+# 加载Downgap配置
+downgap_cfg = load_config(CONS_DOWNGAP_TOML)
+dataset_group_cons = downgap_cfg['dataset_group_cons']
+# 加载Oversold配置
+oversold_cfg = load_config(CONS_OVERSOLD_TOML)
+PAUSE = oversold_cfg['PAUSE']
 
 # send wechat message
 def send_message_via_bark(device_key, title, message):

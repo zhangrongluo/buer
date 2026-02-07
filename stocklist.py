@@ -4,7 +4,14 @@
 import datetime
 import tushare as ts 
 import pandas as pd
-from cons_general import STOCK_LIST_CSV, TRADE_CAL_CSV, UP_DOWN_LIMIT_CSV, SUSPEND_STOCK_CSV
+from cons_hidden import load_config, CONS_GENERAL_TOML
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+STOCK_LIST_CSV = general_config['STOCK_LIST_CSV']
+TRADE_CAL_CSV = general_config['TRADE_CAL_CSV']
+UP_DOWN_LIMIT_CSV = general_config['UP_DOWN_LIMIT_CSV']
+SUSPEND_STOCK_CSV = general_config['SUSPEND_STOCK_CSV']
 
 __all__ = ['get_name_and_industry_by_code', 'get_all_stocks_info', 'STOCK_LIST_NUMS', 'LIST_DF', 'pro']
 

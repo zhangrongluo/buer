@@ -6,10 +6,18 @@ import tqdm
 import pandas as pd
 import datetime
 from concurrent.futures import ThreadPoolExecutor
-from cons_general import BASICDATA_DIR, DATASETS_DIR, TEMP_DIR
-from cons_downgap import dataset_group_cons
 from stocklist import get_name_and_industry_by_code, get_all_stocks_info
 from utils import get_qfq_price_DF_by_adj_factor
+from cons_hidden import load_config, CONS_GENERAL_TOML, CONS_DOWNGAP_TOML
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+BASICDATA_DIR = general_config['BASICDATA_DIR']
+DATASETS_DIR = general_config['DATASETS_DIR']
+TEMP_DIR = general_config['TEMP_DIR']
+# 加载Downgap配置
+downgap_config = load_config(CONS_DOWNGAP_TOML)
+dataset_group_cons = downgap_config['dataset_group_cons']
 
 daily_root = os.path.join(BASICDATA_DIR, 'dailydata')
 os.makedirs(daily_root, exist_ok=True)

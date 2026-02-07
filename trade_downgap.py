@@ -7,14 +7,24 @@ import logging
 from typing import Literal
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
-from cons_general import DATASETS_DIR, BASICDATA_DIR, TRADE_DIR, TEST_DIR, TRADE_CAL_CSV, PREDICT_DIR
-from cons_downgap import dataset_group_cons
-from cons_hidden import bark_device_key
+from cons_hidden import bark_device_key, load_config, CONS_GENERAL_TOML, CONS_DOWNGAP_TOML
 from utils import (send_message_via_bark, get_stock_realtime_price, calculate_days_from_tradedate_to_filldate, 
                    is_trade_date_or_not, get_up_down_limit, is_decreasing_or_not, is_rising_or_not, is_suspended_or_not,
                    get_qfq_price_by_adj_factor, get_XR_adjust_amount_by_dividend_data, early_sell_standard_downgap, 
                    calculate_today_series_statistic_indicator)
 from stocklist import get_name_and_industry_by_code
+
+# 加载配置文件
+general_cfg = load_config(CONS_GENERAL_TOML)
+DATASETS_DIR = general_cfg['DATASETS_DIR']
+BASICDATA_DIR = general_cfg['BASICDATA_DIR']
+TRADE_DIR = general_cfg['TRADE_DIR']
+TEST_DIR = general_cfg['TEST_DIR']
+TRADE_CAL_CSV = general_cfg['TRADE_CAL_CSV']
+PREDICT_DIR = general_cfg['PREDICT_DIR']
+# 加载Downgap配置
+downgap_cfg = load_config(CONS_DOWNGAP_TOML)
+dataset_group_cons = downgap_cfg['dataset_group_cons']
 
 daily_root = f'{BASICDATA_DIR}/dailydata'
 os.makedirs(daily_root, exist_ok=True)

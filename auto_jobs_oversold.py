@@ -2,9 +2,7 @@ import os
 import time # type: ignore
 import datetime
 import shutil
-from tensorflow.keras import layers  # type: ignore
 import pandas as pd  # type: ignore
-from tensorflow import keras  
 from apscheduler.schedulers.background import BackgroundScheduler
 from utils import calculate_today_series_statistic_indicator, check_pre_trade_data_update_status, send_message_via_bark, check_daily_temp_data_update_status
 from stocklist import get_stock_list, get_trade_cal, get_up_down_limit_list, get_suspend_stock_list, load_list_df
@@ -12,12 +10,20 @@ from basic_data_alt_edition import (update_all_daily_data, update_all_daily_indi
                                     download_all_stocks_daily_temp_adjfactor_data, download_all_stocks_daily_temp_data, 
                                     download_all_stocks_daily_temp_indicator_data, download_all_stocks_daily_simple_temp_quant_factor)
 from trade_oversold import trade_process, XD_holding_list, XD_buy_in_list, build_buy_in_list
-from cons_hidden import bark_device_key
-from cons_general import TRADE_CAL_CSV, TRADE_DIR, BACKUP_DIR, BASICDATA_DIR
-from cons_oversold import MODEL_NAME
+from cons_hidden import bark_device_key, load_config, CONS_GENERAL_TOML, CONS_OVERSOLD_TOML
 from datasets_oversold import update_dataset
 from model_oversold import train_dataset
 from predict_oversold import predict_dataset
+
+# 加载通用配置
+general_config = load_config(CONS_GENERAL_TOML)
+TRADE_CAL_CSV = general_config['TRADE_CAL_CSV']
+TRADE_DIR = general_config['TRADE_DIR']
+BACKUP_DIR = general_config['BACKUP_DIR']
+BASICDATA_DIR = general_config['BASICDATA_DIR']
+# 加载oversold模型配置
+oversold_config = load_config(CONS_OVERSOLD_TOML)
+MODEL_NAME = oversold_config['MODEL_NAME']
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -146,7 +152,7 @@ def backup_trade_data():
     把TRADE_DIR/oversold目录下的所有文件备份到BACKUP_DIR/oversold/oversold_<备份时间>目录下
     NOTE:
     备份清单包括: 买入清单、持有清单、交易日志、资金流水、每日利润、每日指标文件
-    保留最近的6个备份
+    保留最近的12个备份
     """
     trade_dir = f'{TRADE_DIR}/oversold'
     backup_root = f'{BACKUP_DIR}/oversold'
@@ -157,6 +163,25 @@ def backup_trade_data():
     dirs.sort(reverse=True)
     [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[12:]]  # 保留最近12个备份
     print(f'({MODEL_NAME}) oversold 模型交易数据备份完成！')
+
+@is_trade_day(task='备份配置文件')
+def backup_config_files():
+    """
+    把cons目录下的全部文件备份到BACKUP_DIR/cons/config_<备份时间>目录下
+    NOTE:
+    备份清单包括: cons_general.toml, cons_oversold.toml和 cons_downgap.toml文件
+    保留最近的12个备份
+    """
+    cons_dir = 'cons'
+    backup_root = f'{BACKUP_DIR}/cons'
+    os.makedirs(backup_root, exist_ok=True)
+    backup_dir = f'{backup_root}/config_{datetime.datetime.now().strftime("%Y%m%d %H%M%S")}'
+    shutil.copytree(cons_dir, backup_dir, dirs_exist_ok=True)
+    files = os.listdir(backup_root)
+    dirs = [d for d in files if os.path.isdir(os.path.join(backup_root, d))]
+    dirs.sort(reverse=True)
+    [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[12:]]  # 保留最近12个备份
+    print(f'({MODEL_NAME}) 配置文件备份完成！')
 
 # 动态任务am
 @is_trade_day(task='股票交易')
@@ -309,6 +334,13 @@ def auto_run():
         hour=15, minute=15, misfire_grace_time=300,
         id='backup_trade_data_pm',
         name='备份下午交易数据'
+    )
+    scheduler.add_job(
+        backup_config_files,
+        trigger='cron',
+        hour=15, minute=20, misfire_grace_time=300,
+        id='backup_config_files',
+        name='备份配置文件'
     )
     scheduler.add_job(
         update_daily_data_and_indicator,

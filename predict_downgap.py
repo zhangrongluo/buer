@@ -1,8 +1,18 @@
 import os
 import pandas as pd
 from tensorflow import keras
-from cons_general import TEMP_DIR, MODELS_DIR, PREDICT_DIR
-from cons_downgap import dataset_group_cons
+# from cons_general import TEMP_DIR, MODELS_DIR, PREDICT_DIR
+# from cons_downgap import dataset_group_cons
+from cons_hidden import load_config, CONS_GENERAL_TOML, CONS_DOWNGAP_TOML
+
+# 加载配置文件
+general_cfg = load_config(CONS_GENERAL_TOML)
+TEMP_DIR = general_cfg['TEMP_DIR']
+MODELS_DIR = general_cfg['MODELS_DIR']
+PREDICT_DIR = general_cfg['PREDICT_DIR']
+# 加载Downgap配置
+downgap_cfg = load_config(CONS_DOWNGAP_TOML)
+dataset_group_cons = downgap_cfg['dataset_group_cons']
 
 temp_root = f'{TEMP_DIR}/downgap'
 os.makedirs(temp_root, exist_ok=True)
