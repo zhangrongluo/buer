@@ -183,6 +183,24 @@ def backup_config_files():
     [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[12:]]  # 保留最近12个备份
     print(f'({MODEL_NAME}) 配置文件备份完成！')
 
+@is_trade_day(task='备份模型文件')
+def backup_model_files():
+    """
+    把models目录下模型文件备份到BACKUP_DIR/models/model_<备份时间>目录下
+    NOTE:
+    保留最近的6个备份
+    """
+    model_dir = 'models'
+    backup_root = f'{BACKUP_DIR}/models'
+    os.makedirs(backup_root, exist_ok=True)
+    backup_dir = f'{backup_root}/model_{datetime.datetime.now().strftime("%Y%m%d %H%M%S")}'
+    shutil.copytree(model_dir, backup_dir, dirs_exist_ok=True)
+    files = os.listdir(backup_root)
+    dirs = [d for d in files if os.path.isdir(os.path.join(backup_root, d))]
+    dirs.sort(reverse=True)
+    [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[6:]]  # 保留最近6个备份
+    print(f'({MODEL_NAME}) 模型文件备份完成！')
+
 # 动态任务am
 @is_trade_day(task='股票交易')
 def trading_task_am(scheduler):
@@ -341,6 +359,13 @@ def auto_run():
         hour=15, minute=20, misfire_grace_time=300,
         id='backup_config_files',
         name='备份配置文件'
+    )
+    scheduler.add_job(
+        backup_model_files,
+        trigger='cron',
+        hour=15, minute=25, misfire_grace_time=300,
+        id='backup_model_files',
+        name='备份模型文件'
     )
     scheduler.add_job(
         update_daily_data_and_indicator,
