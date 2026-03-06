@@ -181,14 +181,14 @@ def backup_config_files():
     dirs = [d for d in files if os.path.isdir(os.path.join(backup_root, d))]
     dirs.sort(reverse=True)
     [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[12:]]  # 保留最近12个备份
-    print(f'({MODEL_NAME}) 配置文件备份完成！')
+    print(f'({MODEL_NAME}) oversold 和 downgap 配置文件备份完成！')
 
 @is_trade_day(task='备份模型文件')
 def backup_model_files():
     """
     把models目录下模型文件备份到BACKUP_DIR/models/model_<备份时间>目录下
     NOTE:
-    保留最近的6个备份
+    保留最近的3个备份
     """
     model_dir = 'models'
     backup_root = f'{BACKUP_DIR}/models'
@@ -198,8 +198,8 @@ def backup_model_files():
     files = os.listdir(backup_root)
     dirs = [d for d in files if os.path.isdir(os.path.join(backup_root, d))]
     dirs.sort(reverse=True)
-    [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[6:]]  # 保留最近6个备份
-    print(f'({MODEL_NAME}) 模型文件备份完成！')
+    [shutil.rmtree(os.path.join(backup_root, d)) for d in dirs[3:]]  # 保留最近3个备份
+    print(f'({MODEL_NAME}) oversold 和 downgap 模型文件备份完成！')
 
 # 动态任务am
 @is_trade_day(task='股票交易')

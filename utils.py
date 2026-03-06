@@ -574,15 +574,21 @@ def early_sell_standard_oversold_v2(holding_days: int, target_rate: float, rate_
     #### :param rate_current: 当前收益率
     #### :return: True if should sell, False otherwise
     #### NOTE:
-    #### holding_days < 30 and rate_current >= 0.20
-    #### 90 > holding_days >= 30 and rate_current >= target_rate * 0.50
-    #### 150 > holding_days >= 90 and rate_current >= target_rate * 0.70
+    #### holding_days < 10 and rate_current >= 0.12
+    #### 30 > holding_days >= 10 and rate_current >= target_rate * 0.40
+    #### 60 > holding_days >= 30 and rate_current >= target_rate * 0.50
+    #### 90 > holding_days >= 60 and rate_current >= target_rate * 0.60
+    #### 150 > holding_days >= 90 and rate_current >= target_rate * 0.75
     """
-    if holding_days < 30 and rate_current >= 0.20:
+    if holding_days < 10 and rate_current >= 0.12:
         return True
-    elif 30 <= holding_days < 90 and rate_current >= target_rate * 0.50:
+    elif 10 <= holding_days < 30 and rate_current >= target_rate * 0.40:
         return True
-    elif 90 <= holding_days < 150 and rate_current >= target_rate * 0.70:
+    elif 30 <= holding_days < 60 and rate_current >= target_rate * 0.50:
+        return True
+    elif 60 <= holding_days < 90 and rate_current >= target_rate * 0.60:
+        return True
+    elif 90 <= holding_days < 150 and rate_current >= target_rate * 0.75:
         return True
     else:
         return False
@@ -779,7 +785,8 @@ def calculate_win_rate_of_stocks(
     holding_csv = f'{trade_root}/holding_list.csv'
     if not os.path.exists(holding_csv):
         return 0.0
-    holding_df = pd.read_csv(holding_csv)
+    holding_df = pd.read_csv(holding_csv, dtype={'date_out': str})
+    holding_df['date_out'] = holding_df['date_out'].str.replace(r'\.0$', '', regex=True)
     sold_stocks_df = holding_df[holding_df['status'] == 'sold_out']
     if start is not None:
         sold_stocks_df = sold_stocks_df[sold_stocks_df['date_out'] >= start]
@@ -1303,7 +1310,7 @@ def plot_portfolio_earning_charts(
         mdd = calculate_max_drawdown_ratio(name, start=start, end=end, **kwargs)
         sharpe_ratio = calculate_sharpe_ratio(name, rf=RISK_FREE_RATE, start=start, end=end, **kwargs)
         omega_ratio = calculate_omega_ratio(name, start=start, end=end, **kwargs)
-        win_rate_stocks = indicator_df['win_rate_stocks'].iloc[-1]
+        win_rate_stocks = calculate_win_rate_of_stocks(name, start=start, end=end, **kwargs)
         annualized_return = (1 + total_return) ** (365 / total_days) - 1
         start_date = indicator_df['trade_date'].iloc[0]
         end_date = indicator_df['trade_date'].iloc[-1]
