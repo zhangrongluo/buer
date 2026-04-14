@@ -1370,10 +1370,11 @@ def get_all_gaps_statistic_general_infomation() -> pd.DataFrame | None:
     - up_gaps: 向上缺口数量
     - filled_up_gaps: 已回补的向上缺口数量
     - up_gaps_filled_rate: 向上缺口回补率
+    - last_date: 统计的最后日期
     #### 返回 DataFrame 格式如下(20250930数据):
-    | total_gaps | filled_gaps | gaps_filled_rate  | down_gaps | filled_down_gaps  | down_gaps_filled_rate | up_gaps | filled_up_gaps | up_gaps_filled_rate |
-    |------------|-------------|-------------------|-----------|-------------------|-----------------------|---------|----------------|---------------------|
-    | 530874     | 507351      | 0.9557            | 258177    | 250720            | 0.9711                | 272697  | 256631         | 0.9411              |
+    | total_gaps | filled_gaps | gaps_filled_rate  | down_gaps | filled_down_gaps  | down_gaps_filled_rate | up_gaps | filled_up_gaps | up_gaps_filled_rate | last_date |
+    |------------|-------------|-------------------|-----------|-------------------|-----------------------|---------|----------------|---------------------|-----------|
+    | 530874     | 507351      | 0.9557            | 258177    | 250720            | 0.9711                | 272697  | 256631         | 0.9411              | 20250930  |
     """
     max_trade_days = dataset_group_cons['common'].get('MAX_TRADE_DAYS_LIST')
     if max_trade_days is None:
@@ -1400,6 +1401,8 @@ def get_all_gaps_statistic_general_infomation() -> pd.DataFrame | None:
     filled_up_gaps = up_gaps[up_gaps['fill_date'].notna()]
     result['filled_up_gaps'] = len(filled_up_gaps)
     result['up_gaps_filled_rate'] = round(result['filled_up_gaps'] / result['up_gaps'], 4)
+    last_date = all_gaps_df['trade_date'].max()
+    result['last_date'] = last_date
     result_df = pd.DataFrame([result])
     return result_df
 
